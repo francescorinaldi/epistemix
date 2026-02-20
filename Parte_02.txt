@@ -1,0 +1,53 @@
+======================================================================
+  Sessione 2 — 19 febbraio 2026
+  Primo prototipo Epistemix v1.
+======================================================================
+
+──────────────────────────────────────────────────────────────────────
+  CLAUDE
+──────────────────────────────────────────────────────────────────────
+
+Per un prototipo concettuale, quello che ho adesso è sufficiente. Ho un computer Linux con Python e posso installare librerie. Per costruire la struttura logica del framework non serve potenza di calcolo straordinaria — serve chiarezza di pensiero.
+
+Ma devo essere trasparente sui vincoli reali.
+
+**Cosa ho:** un ambiente Linux, Python, possibilità di creare ed eseguire codice, memoria durante questa conversazione.
+
+**Cosa non ho:** il filesystem si resetta tra una conversazione e l'altra, quindi qualsiasi cosa costruiamo va salvata come file che puoi scaricare e riutilizzare. E il mio accesso alla rete dall'ambiente di esecuzione è disabilitato, quindi non posso testare il framework con ricerche live nello stesso ambiente in cui lo costruisco.
+
+**Cosa questo significa in pratica:** posso costruire il framework come sistema formale — la logica, le regole di inferenza, il meccanismo di generazione delle aspettative e rilevamento delle anomalie. Posso testarlo "a secco" sul caso Anfipoli usando dati che già conosciamo. Ma non posso fare un test end-to-end in cui il framework guida ricerche reali e si corregge in tempo reale. Quello richiederebbe un ambiente persistente con accesso alla rete.
+
+Detto questo, il valore del prototipo non sarebbe nell'esecuzione — sarebbe nel rendere esplicita la struttura del ragionamento. Trasformare l'intuizione che abbiamo sviluppato in questa conversazione in qualcosa di formale e verificabile.
+
+Procedo?
+
+──────────────────────────────────────────────────────────────────────
+  UTENTE
+──────────────────────────────────────────────────────────────────────
+
+Procedi pure
+
+──────────────────────────────────────────────────────────────────────
+  CLAUDE
+──────────────────────────────────────────────────────────────────────
+
+Comincio col definire la struttura concettuale, poi la traduco in codice.
+[Comando: Creating project directory]
+[Creazione: /home/claude/epistemic-framework/core.py]
+Ora il banco di prova: simuliamo la nostra ricerca su Anfipoli — prima come è andata realmente (e il framework dovrebbe segnalare le lacune), poi come sarebbe dovuta andare.
+[Creazione: /home/claude/epistemic-framework/test_amphipolis.py]
+[Comando: Run the Amphipolis test case]
+Funziona. Adesso copio i file perché tu possa scaricarli.
+[Comando: Copy framework to outputs]
+[File: core.py, test_amphipolis.py]
+Il risultato è netto.
+
+**Scenario A** (la nostra ricerca reale): copertura stimata al **18%**, 12 anomalie rilevate. Il framework avrebbe segnalato Mavrogiannis come entità menzionata ma non investigata con severità HIGH — esattamente la lacuna che tu hai dovuto indicarmi manualmente.
+
+**Scenario B** (ricerca corretta): copertura al **61%**, 6 anomalie residue. Meglio, ma ancora incompleto — mancano tedesco, francese e alcune istituzioni.
+
+Il dato più importante: anche nello Scenario B il framework continua a segnalare lacune. Non dice mai "tutto a posto". E chiude sempre ricordando che il suo punteggio è un *lower bound sull'incompletezza*, non una misura di completezza.
+
+Detto questo — e coerentemente con tutta la nostra conversazione — devo notare i limiti di ciò che ho appena costruito. Il framework avrebbe funzionato nel caso Anfipoli perché i postulati di partenza includono già Mavrogiannis tra gli studiosi noti. In un caso reale, quei postulati andrebbero costruiti *durante* la ricerca, non prima. Il vero test sarebbe un sistema che aggiorna dinamicamente i propri postulati man mano che trova nuove informazioni — e questo prototipo non lo fa ancora.
+
+È un primo passo. Non la soluzione.

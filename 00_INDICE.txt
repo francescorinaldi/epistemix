@@ -1,0 +1,56 @@
+======================================================================
+  EPISTEMIX — BACKUP COMPLETO DELLA CONVERSAZIONE
+  18-20 febbraio 2026
+======================================================================
+
+Questo backup contiene la trascrizione leggibile di tutte le sessioni
+di conversazione che hanno portato alla creazione del framework
+Epistemix, dalla prima domanda sulla tomba di Anfipoli fino alla
+pianificazione del prodotto commerciale.
+
+TRASCRIZIONI:
+──────────────────────────────────────────────────────────────────────
+
+Parte_01.txt (61 KB)
+  Sessione 1 — 18 febbraio 2026
+  Ricerca su Anfipoli. Due teorie (Efestione/Olimpiade). Scoperta
+  di Mavrogiannis e del bias linguistico. Riflessione epistemologica
+  ricorsiva. Nascita dell'idea di un framework formale.
+
+Parte_02.txt (5 KB)
+  Sessione 2 — 19 febbraio 2026
+  Primo prototipo Epistemix v1. Postulati statici. Vincoli tecnici.
+
+Parte_03.txt (28 KB)
+  Sessione 3 — 20 febbraio 2026 (prima parte)
+  Epistemix v2: core engine con postulati dinamici, citation graph,
+  aspettative disciplinari, content analysis.
+
+Parte_04_Sessione3_post_compattazione.txt (27 KB)
+  Sessione 3 — 20 febbraio 2026 (seconda parte)
+  Multi-agente, test integrato (18 anomalie), connector API,
+  discussioni su AGI, applicazioni, prodotto, modello di business,
+  protezione IP, piano primo mese, generazione documenti.
+
+DOCUMENTI PRODOTTI:
+──────────────────────────────────────────────────────────────────────
+
+Epistemix_v1_Sintesi.docx         Sintesi completa del progetto
+Epistemix_Piano_Primo_Mese.pdf    Piano operativo primo mese
+Epistemix_Spot.pdf                One-pager promozionale
+Epistemix_Business_Model.pdf      Modello di business e proiezioni
+
+CODICE (cartella epistemix-v2/):
+──────────────────────────────────────────────────────────────────────
+
+core.py               46 KB   Motore principale
+citation_graph.py     11 KB   Grafo citazionale
+disciplines.py        12 KB   Aspettative disciplinari
+content_analysis.py   17 KB   Assenze, convergenza
+multi_agent.py        24 KB   Due agenti + arbitro
+connector.py          13 KB   Ponte Claude API
+run.py                12 KB   Orchestratore CLI
+test_integrated.py    17 KB   Test completo
+test_amphipolis.py    21 KB   Simulazione Anfipoli
+
+======================================================================
