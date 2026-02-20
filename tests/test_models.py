@@ -8,7 +8,9 @@ from epistemix.models import (
     Expectation,
     Finding,
     GapType,
+    RelationType,
     SearchQuery,
+    SemanticRelation,
     Severity,
 )
 
@@ -248,3 +250,50 @@ class TestCycleSnapshot:
         assert d["weighted_postulates"] == 12
         assert d["avg_confidence"] == 0.456
         assert d["negative_postulates"] == 3
+
+
+class TestRelationType:
+    def test_all_relation_types_exist(self):
+        assert RelationType.SUPPORTS.value == "supports"
+        assert RelationType.CONTESTS.value == "contests"
+        assert RelationType.CONTRADICTS.value == "contradicts"
+        assert RelationType.CITES.value == "cites"
+        assert RelationType.EXTENDS.value == "extends"
+        assert RelationType.SUPERVISES.value == "supervises"
+        assert RelationType.COAUTHORS.value == "coauthors"
+        assert RelationType.TRANSLATES.value == "translates"
+
+
+class TestSemanticRelation:
+    def test_default_values(self):
+        rel = SemanticRelation(
+            source="Chugg",
+            target="Peristeri",
+            relation=RelationType.CITES,
+            confidence=0.9,
+            evidence="Chugg references Peristeri 2014 findings",
+            language="en",
+        )
+        assert rel.source == "Chugg"
+        assert rel.target == "Peristeri"
+        assert rel.relation == RelationType.CITES
+        assert rel.confidence == 0.9
+        assert rel.cycle == 0
+
+    def test_to_dict(self):
+        rel = SemanticRelation(
+            source="Mavrogiannis",
+            target="Peristeri",
+            relation=RelationType.CONTESTS,
+            confidence=0.8,
+            evidence="Mavrogiannis contests Peristeri interpretation",
+            language="it",
+            cycle=2,
+        )
+        d = rel.to_dict()
+        assert d["source"] == "Mavrogiannis"
+        assert d["target"] == "Peristeri"
+        assert d["relation"] == "contests"
+        assert d["confidence"] == 0.8
+        assert d["language"] == "it"
+        assert d["cycle"] == 2
