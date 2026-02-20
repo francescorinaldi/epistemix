@@ -51,7 +51,11 @@ CREATE POLICY "Users can create audits"
     WITH CHECK (auth.uid() = user_id);
 
 -- Workers update audits via service role (bypasses RLS)
--- No UPDATE/DELETE policy for users — only the worker modifies audit state
+-- Users can only stop their own running audits (status → complete)
+CREATE POLICY "Users can stop own running audits"
+    ON public.audits FOR UPDATE
+    USING (auth.uid() = user_id AND status = 'running')
+    WITH CHECK (auth.uid() = user_id AND status = 'complete');
 
 -- Auto-update updated_at
 CREATE TRIGGER audits_updated_at

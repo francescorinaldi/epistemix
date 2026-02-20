@@ -6,7 +6,8 @@ app = "epistemix-worker"
 primary_region = "ams"
 
 [build]
-  dockerfile = "../Dockerfile"
+  # Run from repo root: fly deploy -c worker/fly.toml
+  dockerfile = "worker/Dockerfile"
 
 # No HTTP service — this is a one-shot worker, not a web server
 # Machines are created via the Machines API from the edge function
