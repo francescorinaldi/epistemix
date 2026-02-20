@@ -132,6 +132,74 @@ class TestEmptyQueryAnalyzer:
         assert stats["en"]["empty"] == 1
 
 
+class TestNegativePostulateGeneration:
+    def test_empty_language_generates_negative_postulate(self):
+        """Languages with > 50% empty queries produce NegativePostulates."""
+        analyzer = EmptyQueryAnalyzer()
+        # German: 3 queries, all empty
+        for i in range(3):
+            analyzer.register_result(QueryResult(
+                query=f"german_query_{i}", language="de", empty=True,
+            ))
+        negatives = analyzer.generate_negative_postulates(cycle=2)
+        assert len(negatives) >= 1
+        assert negatives[0].language == "de"
+        assert negatives[0].detected_at_cycle == 2
+
+    def test_access_barrier_language(self):
+        """Chinese queries should get access_barrier reason."""
+        analyzer = EmptyQueryAnalyzer()
+        for i in range(3):
+            analyzer.register_result(QueryResult(
+                query=f"chinese_query_{i}", language="zh", empty=True,
+            ))
+        negatives = analyzer.generate_negative_postulates()
+        zh_negs = [n for n in negatives if n.language == "zh"]
+        assert len(zh_negs) >= 1
+        assert zh_negs[0].possible_reason == "access_barrier"
+        assert "CNKI" in zh_negs[0].reformulation
+
+    def test_wrong_terminology_reason(self):
+        """All-empty non-barrier language gets wrong_terminology."""
+        analyzer = EmptyQueryAnalyzer()
+        for i in range(3):
+            analyzer.register_result(QueryResult(
+                query=f"german_query_{i}", language="de", empty=True,
+            ))
+        negatives = analyzer.generate_negative_postulates()
+        de_negs = [n for n in negatives if n.language == "de"]
+        assert len(de_negs) >= 1
+        assert de_negs[0].possible_reason == "wrong_terminology"
+
+    def test_no_negatives_for_productive_language(self):
+        """Languages with good results produce no NegativePostulates."""
+        analyzer = EmptyQueryAnalyzer()
+        for i in range(5):
+            analyzer.register_result(QueryResult(
+                query=f"en_query_{i}", language="en",
+                findings_count=3, empty=False,
+            ))
+        negatives = analyzer.generate_negative_postulates()
+        assert len(negatives) == 0
+
+    def test_mixed_results_genuinely_absent(self):
+        """Language with some productive and mostly empty → genuinely_absent."""
+        analyzer = EmptyQueryAnalyzer()
+        # 1 productive, 4 empty = 80% empty
+        analyzer.register_result(QueryResult(
+            query="good", language="it",
+            findings_count=2, empty=False,
+        ))
+        for i in range(4):
+            analyzer.register_result(QueryResult(
+                query=f"empty_{i}", language="it", empty=True,
+            ))
+        negatives = analyzer.generate_negative_postulates()
+        it_negs = [n for n in negatives if n.language == "it"]
+        assert len(it_negs) >= 1
+        assert it_negs[0].possible_reason == "genuinely_absent"
+
+
 class TestContentAnalysisEngine:
     def test_facade_collects_all_anomalies(self):
         engine = ContentAnalysisEngine()
@@ -149,3 +217,13 @@ class TestContentAnalysisEngine:
         ))
         anomalies = engine.generate_all_anomalies()
         assert len(anomalies) >= 2  # structural + convergence
+
+    def test_facade_generates_negative_postulates(self):
+        """ContentAnalysisEngine facade should delegate to EmptyQueryAnalyzer."""
+        engine = ContentAnalysisEngine()
+        for i in range(3):
+            engine.empty_queries.register_result(QueryResult(
+                query=f"q{i}", language="de", empty=True,
+            ))
+        negatives = engine.generate_negative_postulates(cycle=1)
+        assert len(negatives) >= 1

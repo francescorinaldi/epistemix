@@ -14,6 +14,7 @@ const FLY_API_TOKEN = Deno.env.get("FLY_API_TOKEN")!;
 const FLY_APP_NAME = Deno.env.get("FLY_APP_NAME") || "epistemix-worker";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const BYOK_ENCRYPTION_KEY = Deno.env.get("BYOK_ENCRYPTION_KEY")!;
 
 interface AuditPayload {
   type: "INSERT";
@@ -26,6 +27,35 @@ interface AuditPayload {
     discipline: string;
     max_cycles: number;
   };
+}
+
+/**
+ * Decrypt a BYOK API key using AES-GCM.
+ * The encrypted value is stored as base64(iv + ciphertext).
+ */
+async function decryptApiKey(encrypted: string): Promise<string> {
+  const rawKey = Uint8Array.from(atob(BYOK_ENCRYPTION_KEY), (c) =>
+    c.charCodeAt(0)
+  );
+  const key = await crypto.subtle.importKey(
+    "raw",
+    rawKey,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  const data = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
+  const iv = data.slice(0, 12);
+  const ciphertext = data.slice(12);
+
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext
+  );
+
+  return new TextDecoder().decode(decrypted);
 }
 
 serve(async (req: Request) => {
@@ -79,6 +109,16 @@ serve(async (req: Request) => {
       event_type: "audit_started",
     });
 
+    // Decrypt BYOK API key if present
+    let decryptedApiKey: string | null = null;
+    if (profile?.anthropic_key_encrypted) {
+      try {
+        decryptedApiKey = await decryptApiKey(profile.anthropic_key_encrypted);
+      } catch (err) {
+        console.error("Failed to decrypt BYOK key:", err);
+      }
+    }
+
     // Start Fly.io Machine
     const machineConfig = {
       config: {
@@ -91,10 +131,8 @@ serve(async (req: Request) => {
           AUDIT_MAX_CYCLES: String(audit.max_cycles),
           SUPABASE_URL: SUPABASE_URL,
           SUPABASE_SERVICE_ROLE_KEY: SUPABASE_SERVICE_ROLE_KEY,
-          // Pass user's API key if they have one (BYOK)
-          ...(profile?.anthropic_key_encrypted
-            ? { ANTHROPIC_API_KEY: profile.anthropic_key_encrypted }
-            : {}),
+          // Pass user's decrypted API key if they have one (BYOK)
+          ...(decryptedApiKey ? { ANTHROPIC_API_KEY: decryptedApiKey } : {}),
         },
         auto_destroy: true, // Machine destroyed when process exits
         restart: { policy: "no" }, // Don't restart — one-shot job

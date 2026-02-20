@@ -11,12 +11,9 @@ import os
 import sys
 import traceback
 
-# Add the packages/core source to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from epistemix.connector import MockConnector, BaseConnector
-from epistemix.core import EpistemicEngine
-from epistemix.models import ResearchState
+from epistemix.connector import MockConnector, BaseConnector, ClaudeConnector
+from epistemix.core import EpistemixEngine
+from epistemix.models import Finding, Anomaly, CycleSnapshot
 from epistemix.multi_agent import MultiAgentSystem
 from supabase_writer import SupabaseWriter
 
@@ -25,7 +22,6 @@ def create_connector() -> BaseConnector:
     """Create the appropriate connector based on available credentials."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
-        from epistemix.connector import ClaudeConnector
         return ClaudeConnector(
             api_key=api_key,
             model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514"),
@@ -37,39 +33,28 @@ def create_connector() -> BaseConnector:
         return MockConnector()
 
 
-def serialize_finding(f) -> dict:
+def serialize_finding(f: Finding) -> dict:
     return {
-        "name": f.name,
-        "finding_type": f.finding_type.value,
-        "description": f.description,
-        "source_query": f.source_query,
-        "language": f.language.value,
-        "citations": f.citations,
-        "metadata": f.metadata,
+        "source": f.source,
+        "language": f.language,
+        "author": f.author,
+        "institution": f.institution,
+        "theory_supported": f.theory_supported,
+        "source_type": f.source_type,
+        "year": f.year,
+        "entities_mentioned": f.entities_mentioned,
+        "cycle": f.cycle,
     }
 
 
-def serialize_anomaly(a) -> dict:
+def serialize_anomaly(a: Anomaly) -> dict:
     return {
-        "id": a.id,
-        "anomaly_type": a.anomaly_type.value,
-        "severity": a.severity.value,
         "description": a.description,
+        "gap_type": a.gap_type.value,
+        "severity": a.severity.value,
+        "recommendation": a.recommendation,
         "suggested_queries": a.suggested_queries,
-        "related_postulate_id": a.related_postulate_id,
         "detected_at_cycle": a.detected_at_cycle,
-        "resolved": a.resolved,
-    }
-
-
-def serialize_postulate(p) -> dict:
-    return {
-        "id": p.id,
-        "description": p.description,
-        "meta_axiom_id": p.meta_axiom_id,
-        "status": p.status.value,
-        "confirming_findings": p.confirming_findings,
-        "generated_at_cycle": p.generated_at_cycle,
     }
 
 
@@ -89,66 +74,70 @@ def main() -> None:
         connector = create_connector()
 
         # --- Phase 1: Single engine audit ---
-        state = ResearchState(topic=topic, country=country, discipline=discipline)
-        engine = EpistemicEngine(connector=connector, state=state, verbose=True)
+        engine = EpistemixEngine(
+            country=country,
+            topic=topic,
+            discipline=discipline,
+        )
 
-        # Run cycles one by one for real-time progress updates
+        # Seed queries
+        queries = engine.initialize()
+
+        # Execute seed queries and ingest findings
+        seed_findings = connector.execute_batch(queries)
+        engine.ingest_findings(seed_findings)
+
+        # Run cycles for real-time progress updates
         for cycle in range(max_cycles):
-            state.current_cycle = cycle
-            coverage = engine.run_cycle(cycle)
+            snapshot = engine.run_cycle()
 
             # Write progress after each cycle
             coverage_history = [
-                {"cycle": c.cycle, "percentage": c.percentage, "confirmed": c.confirmed, "total": c.total}
-                for c in state.coverage_history
+                s.to_dict() for s in engine.cycle_history
             ]
             writer.update_cycle(
-                cycle=cycle,
+                cycle=snapshot.cycle,
                 coverage_history=coverage_history,
-                findings_count=len(state.unique_findings),
-                anomalies_count=len(state.anomalies),
             )
-            writer.write_findings([serialize_finding(f) for f in state.findings])
-            writer.write_postulates([serialize_postulate(p) for p in state.postulates])
-            writer.write_anomalies([serialize_anomaly(a) for a in state.anomalies])
+            writer.write_findings([serialize_finding(f) for f in engine.findings])
+            writer.write_anomalies([serialize_anomaly(a) for a in engine.all_anomalies])
 
-            print(f"Cycle {cycle}: coverage={coverage.percentage}%, findings={len(state.unique_findings)}, anomalies={len(state.anomalies)}")
+            print(f"Cycle {snapshot.cycle}: coverage={snapshot.coverage_score:.1f}%, "
+                  f"findings={snapshot.n_findings}, anomalies={snapshot.n_anomalies}")
+
+            # Execute gap-filling queries generated by this cycle
+            if engine.pending_queries:
+                new_findings = connector.execute_batch(engine.pending_queries)
+                engine.ingest_findings(new_findings)
 
             # Check convergence after cycle 2+
-            if cycle >= 2 and len(state.coverage_history) >= 2:
-                prev = state.coverage_history[-2].percentage
-                curr = coverage.percentage
+            if cycle >= 2 and len(engine.cycle_history) >= 2:
+                prev = engine.cycle_history[-2].coverage_score
+                curr = snapshot.coverage_score
                 if curr - prev < 2.0:
-                    print(f"Convergence reached at cycle {cycle}")
+                    print(f"Convergence reached at cycle {snapshot.cycle}")
                     break
-
-            state.current_cycle += 1
 
         # --- Phase 2: Multi-agent analysis ---
         print("\nRunning multi-agent analysis...")
-        mas = MultiAgentSystem(
-            connector=connector,
-            topic=topic,
-            country=country,
-            discipline=discipline,
-            max_cycles=max_cycles,
-        )
-        multi_result = mas.run()
+        mas = MultiAgentSystem(engine.postulates)
+        multi_result = mas.run(engine.findings)
         writer.write_multi_agent_result(multi_result)
 
         # --- Phase 3: Write detailed records ---
         writer.write_detailed_findings(
             audit_id,
-            [serialize_finding(f) for f in state.findings],
+            [serialize_finding(f) for f in engine.findings],
         )
         writer.write_detailed_anomalies(
             audit_id,
-            [serialize_anomaly(a) for a in state.anomalies],
+            [serialize_anomaly(a) for a in engine.all_anomalies],
         )
 
         # --- Done ---
+        last_coverage = engine.cycle_history[-1].coverage_score if engine.cycle_history else 0
         writer.update_status("complete")
-        print(f"\nAudit complete. Final coverage: {state.coverage_history[-1].percentage}%")
+        print(f"\nAudit complete. Final coverage: {last_coverage:.1f}%")
 
     except Exception as e:
         traceback.print_exc()

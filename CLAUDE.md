@@ -14,7 +14,7 @@ Epistemix is an **epistemic audit framework** that detects "unknown unknowns" in
 5. Runs a dual-agent audit (two agents with different biases → an arbiter finds where they disagree)
 6. Reports coverage as a lower bound — we can never be sure we found everything
 
-The reference scenario is the **Amphipolis tomb excavation** (Greece, archaeology). All mock data and test fixtures use this scenario.
+The reference scenario is the **Amphipolis tomb excavation** (Greece, archaeology). All mock data and test fixtures use this scenario. The **Antikythera mechanism** (Greece, archaeology/history of science) is the live validation scenario, tested Feb 2026 with 7 languages, 4 cycles, 50+ sources, 30+ scholars.
 
 ## Repository Structure
 
@@ -31,7 +31,7 @@ epistemix/
 │   ├── multi_agent.py       # Dual-agent α/β + arbiter
 │   └── run.py               # CLI entry point
 │
-├── tests/                   # 113 tests (pytest)
+├── tests/                   # 138 tests (pytest)
 │   ├── conftest.py          # Shared fixtures, Amphipolis mock data
 │   ├── test_models.py       # Data structure tests
 │   ├── test_citation_graph.py
@@ -118,6 +118,9 @@ models.py ───────┤
 | Dual agents (α/β) | Different axiom weightings, not different prompts | Reproducible, deterministic with MockConnector |
 | Scale-to-zero workers | Fly.io Machines with `auto_destroy: true` | $0 when no audits running |
 | Supabase Realtime | Row-level changes on `audits` table | Frontend updates automatically, no polling |
+| Weighted postulates (v3) | Confidence score per postulate (0.0–1.0) | Drives query strategy: VERIFY/STANDARD/RELIABLE/CONSOLIDATED |
+| Negative postulates (v3) | Structured evidence of absence | Feedback loop: empty query → hypothesis → reformulated query |
+| Temporal decay (v3) | Confidence decays per-domain rate | Archaeology 0.02/month, finance 0.15/month |
 
 ## The 7 Meta-Axioms
 
@@ -135,7 +138,7 @@ models.py ───────┤
 
 The `connector.py` module is the **only place** where AI provider coupling exists.
 
-- **MockConnector**: Pattern-matched responses. Used in all 113 tests. Zero cost.
+- **MockConnector**: Pattern-matched responses. Used in all 138 tests. Zero cost.
 - **ClaudeConnector**: Anthropic SDK with `web_search_20250305` tool, budget tracking, retry with backoff.
 - **Switching**: Set `ANTHROPIC_API_KEY` env var → worker uses `ClaudeConnector`. No key → falls back to `MockConnector`.
 
@@ -168,24 +171,31 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (3 metho
 - Do NOT import upward in the dependency graph
 - Do NOT store secrets in code (use env vars)
 - Do NOT add `networkx` — citation graph uses stdlib BFS
-- Do NOT modify test fixtures in `conftest.py` without running all 113 tests
+- Do NOT modify test fixtures in `conftest.py` without running all 138 tests
 - Do NOT use `git push --force` on main
 - Do NOT create always-on infrastructure (everything scales to zero)
 
-## Current Status (v0.1.0)
+## Current Status (v0.2.0)
 
 **Done:**
-- Complete Python core library (9 modules, 2,423 lines)
-- Full test suite (113 tests, all passing)
+- Complete Python core library (10 modules)
+- Full test suite (138 tests, all passing)
+- v3 Phase 1: WeightedPostulate with confidence scoring
+- v3 Phase 2: NegativePostulate with empty-query feedback loop
+- v3 Phase 7: Temporal decay (per-domain configurable)
 - Next.js web app (landing, auth, dashboard, live audit page, 6 components)
 - Fly.io worker (scale-to-zero, real-time progress)
 - Supabase schema (4 migrations, RLS, Realtime, Edge Functions)
 - CI/CD (GitHub Actions)
 - Docker Compose for local dev
+- Live validation: Antikythera mechanism test (Opus 4.6, Feb 2026)
 
-**Not done yet — see TODO.md:**
-- npm install / build for web app (not yet run in this environment)
+**Not done yet — see TODO.md and PLAN.md:**
+- v3 Phase 3: Semantic Relation Graph
+- v3 Phase 4: Arabic + Chinese with access-barrier axioms
+- v3 Phase 5: Cross-session memory (knowledge store)
+- v3 Phase 6: Generative multi-agent
+- v3 Phase 8: Auto-audit of axioms
 - Stripe integration (billing checkout, webhook)
 - PDF report generation
-- API key management UI
 - Deployment to production (Vercel, Fly.io, Supabase Cloud)

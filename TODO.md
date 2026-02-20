@@ -19,8 +19,18 @@
 - [x] `core.py` — EpistemicEngine (postulates, queries, ingestion, coverage, anomalies, cycles)
 - [x] `multi_agent.py` — Agent α/β + Arbiter + MultiAgentSystem
 - [x] `run.py` — CLI with all flags
-- [x] 113 tests (all passing)
 - [x] `pyproject.toml` — Package configuration, entry point
+
+## Phase 1b: v3 Foundations (COMPLETE)
+
+- [x] `WeightedPostulate` — Confidence scoring (0.0–1.0) with temporal decay
+- [x] `NegativePostulate` — Structured evidence of absence with reformulation
+- [x] Confidence-driven query generation (VERIFY / DEEPEN strategies)
+- [x] Empty query → NegativePostulate feedback loop
+- [x] Temporal decay per domain (archaeology: 0.02, finance: 0.15)
+- [x] CycleSnapshot v3 fields (weighted_postulates_count, avg_confidence, negative_postulates_count)
+- [x] Engine serialization includes v3 data
+- [x] 138 tests (all passing)
 
 ## Phase 2: Production Stack (COMPLETE — code written, not yet deployed)
 
@@ -56,7 +66,46 @@
 - [ ] **API key management** — Enterprise customers get API keys for programmatic access
 - [ ] **Plan upgrade prompts** — In-app prompts when free tier limits reached
 
-## Phase 5: Enhanced Features (NOT STARTED)
+## v3 Phase 3: Semantic Relation Graph (NOT STARTED)
+
+- [ ] **RelationType enum** — SUPPORTS, CONTESTS, CITES, EXTENDS, SUPERVISES, COAUTHORS
+- [ ] **SemanticRelation dataclass** — source, target, relation, confidence, evidence
+- [ ] **semantic_graph.py** — Replaces citation_graph.py for v3
+- [ ] **LLM relation extraction** — Connector prompts for relationship extraction
+- [ ] **Automated inference** — Schools = SUPPORTS clusters, fractures = CONTESTS pairs
+- [ ] **Relational coverage** — Not enough to find entities; must map their relations
+
+## v3 Phase 4: Arabic + Chinese Access Barriers (NOT STARTED)
+
+- [ ] **AccessBarrierAxiom** — Per-language ecosystem classification (open_web, walled_garden)
+- [ ] **Chinese query generation** — Natural phrases, no word-separated keywords
+- [ ] **Arabic query generation** — Morphological variants, triliteral roots
+- [ ] **Coverage annotation** — "not evaluable via web search" for walled-garden languages
+- [ ] **Test with SARS-CoV-2 or similar topic** with strong Chinese research component
+
+## v3 Phase 5: Cross-Session Memory (NOT STARTED)
+
+- [ ] **knowledge_store.py** — Persistence module for accumulated axioms
+- [ ] **Domain axiom library** — Level 1 axioms discovered from audits
+- [ ] **Warm start** — New audit on known domain loads pre-existing axioms
+- [ ] **Cross-domain transfer** — Axioms transferable between similar domains (low initial confidence)
+- [ ] **Storage backend** — SQLite for dev, Supabase for production
+
+## v3 Phase 6: Generative Multi-Agent (NOT STARTED)
+
+- [ ] **AgentFactory** — Generate third agent when α/β diverge
+- [ ] **MetaPostulate** — Explicit "axioms insufficient" declaration
+- [ ] **Cost control** — Max 1 generated agent per session
+- [ ] **External intervention types** — Domain expert review, primary source access
+
+## v3 Phase 8: Auto-Audit of Axioms (NOT STARTED)
+
+- [ ] **Axiom self-evaluation** — After audit, ask "are my meta-axioms correct for this domain?"
+- [ ] **New dimension discovery** — If LLM identifies missing dimension (conf > 0.7), add it
+- [ ] **Hard limits** — Max 2 auto-audit cycles per session
+- [ ] **Hypothesis storage** — Save discovered dimensions in knowledge store as hypotheses
+
+## Production: Enhanced Features (NOT STARTED)
 
 - [ ] **PDF report generation** — Downloadable audit report with charts and findings
 - [ ] **JSON export** — Full audit data as structured JSON download
@@ -64,36 +113,19 @@
 - [ ] **Audit sharing** — Public URL for sharing audit results
 - [ ] **Custom axiom templates** — Per-discipline axiom sets (medicine, finance, law)
 - [ ] **Team features** — Organizations with shared audits
-- [ ] **Audit history diffing** — Show what changed between cycles
-- [ ] **Interactive anomaly resolution** — Mark anomalies as resolved with notes
 
-## Phase 6: Scale & Polish (NOT STARTED)
+## Production: Scale & Polish (NOT STARTED)
 
 - [ ] **Rate limiting** — API rate limits per plan tier
 - [ ] **Caching** — Cache similar queries to reduce API calls
 - [ ] **Monitoring** — Sentry for errors, Vercel Analytics for usage
-- [ ] **Onboarding flow** — Interactive tutorial for first-time users
-- [ ] **Mobile responsiveness** — Ensure all components work on mobile
-- [ ] **Accessibility** — ARIA labels, keyboard navigation
 - [ ] **i18n** — Interface localization (at minimum: English, Italian, Greek)
-- [ ] **SEO** — Meta tags, Open Graph, structured data
-
-## Phase 7: Advanced Research Features (FUTURE)
-
-- [ ] **Temporal analysis** — Track how coverage of a topic evolves over months/years
-- [ ] **Cross-topic comparison** — Compare epistemic coverage across topics
-- [ ] **Citation graph visualization** — Full interactive graph in the browser (larger scale)
-- [ ] **Automated follow-up audits** — Re-run audits periodically and alert on changes
-- [ ] **Domain-specific evidence maps** — Medicine: clinical trials, case studies, meta-analyses
-- [ ] **LLM-assisted anomaly interpretation** — Use Claude to explain why anomalies matter
-- [ ] **Collaborative audits** — Multiple users contribute findings to the same audit
 
 ---
 
 ## Known Issues
 
 - Web app `npm install` not yet run (no `node_modules/` or `package-lock.json`)
-- No end-to-end test with live Claude API (only MockConnector tested)
 - Entity extraction regex patterns may miss non-Latin names
 - `EVIDENCE_DISCIPLINE_MAP` is archaeology-focused — needs expansion for other fields
 - Worker Dockerfile not yet tested in production Fly.io environment
@@ -104,8 +136,9 @@
 
 For the next development session, the recommended order is:
 
-1. **Deploy to Supabase/Vercel/Fly.io** (Phase 3) — Get it running for real
-2. **Run one live audit** — Test with real Claude API to validate entity extraction
-3. **Stripe billing** — Minimum viable: Pro plan checkout + webhook
-4. **PDF reports** — Most requested feature for sharing results
-5. **Custom axiom templates** — Needed to expand beyond archaeology
+1. **v3 Phase 3: Semantic Relation Graph** — The qualitative leap (replaces citation_graph)
+2. **v3 Phase 4: Arabic + Chinese** — Validated by live test (Antikythera showed need)
+3. **v3 Phase 5: Cross-Session Memory** — The moat (accumulated axioms are the defensible asset)
+4. **Deploy to Supabase/Vercel/Fly.io** — Get production stack running
+5. **Stripe billing** — Minimum viable: Pro plan checkout + webhook
+6. **Academic paper** — Amphipolis + Antikythera experimental results → AAAI/NeurIPS target

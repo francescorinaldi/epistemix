@@ -43,7 +43,7 @@ BEGIN
     WHERE id = p_user_id;
 
     CASE v_plan
-        WHEN 'free' THEN RETURN v_count < 3;
+        WHEN 'free' THEN RETURN v_count <= 3;  -- count already incremented by insert trigger
         WHEN 'pro' THEN RETURN TRUE;  -- unlimited
         WHEN 'enterprise' THEN RETURN TRUE;  -- unlimited
         ELSE RETURN FALSE;

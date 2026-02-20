@@ -8,6 +8,8 @@ version: "3.9"
 
 services:
   # Supabase local development (database + auth + realtime)
+  # Uses the official Supabase postgres image which includes
+  # auth.users, extensions (pgsodium, pgcrypto), and realtime schemas.
   supabase-db:
     image: supabase/postgres:15.1.1.61
     ports:
@@ -15,9 +17,12 @@ services:
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
+      # Required for Supabase auth/realtime schemas to initialize
+      JWT_SECRET: super-secret-jwt-token-for-local-dev-only
+      JWT_EXP: 3600
     volumes:
       - supabase-data:/var/lib/postgresql/data
-      - ./supabase/migrations:/docker-entrypoint-initdb.d
+      - ./supabase/migrations:/docker-entrypoint-initdb.d/migrations
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

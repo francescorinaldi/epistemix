@@ -41,8 +41,6 @@ class SupabaseWriter:
         self,
         cycle: int,
         coverage_history: list[dict],
-        findings_count: int,
-        anomalies_count: int,
     ) -> None:
         """Update current cycle progress — triggers Realtime push."""
         self._client.table("audits").update({

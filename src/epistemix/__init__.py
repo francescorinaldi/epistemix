@@ -16,9 +16,11 @@ from epistemix.models import (
     Expectation,
     Finding,
     GapType,
+    NegativePostulate,
     QueryLanguage,
     SearchQuery,
     Severity,
+    WeightedPostulate,
 )
 from epistemix.meta_axioms import META_AXIOMS, MetaAxiom
 
@@ -34,7 +36,9 @@ __all__ = [
     "GapType",
     "MetaAxiom",
     "META_AXIOMS",
+    "NegativePostulate",
     "QueryLanguage",
     "SearchQuery",
     "Severity",
+    "WeightedPostulate",
 ]
