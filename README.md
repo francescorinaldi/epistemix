@@ -1,14 +1,32 @@
 # Epistemix
 
-**Epistemic audit framework — detect unknown unknowns in research.**
+### Map the boundaries of what is known — and what isn't.
 
-Epistemix predicts what knowledge *should* exist about a topic, then verifies whether it does. The gap between expectation and reality reveals blind spots: missing languages, absent disciplines, overlooked scholars, and unexamined theories.
+Epistemix is an epistemic audit framework. Given any research topic, it predicts what knowledge *should* exist — then searches for it. The gap between expectation and reality reveals the blind spots that no one is looking for: missing languages, absent disciplines, overlooked scholars, unexamined theories.
 
-> "The most dangerous gaps in knowledge are the ones you don't know exist."
+Coverage is always reported as a **lower bound**. The denominator grows as we discover more postulates. We can never claim completeness — only measure how much of the map we've drawn so far.
+
+---
+
+## Why This Matters
+
+Systematic reviews find what's *there*. They cannot detect what's *missing*.
+
+If an entire language tradition of scholarship exists but nobody on the review team reads that language, the gap is invisible. If a field has been studied by archaeologists but not geophysicists, and no one thinks to ask, the absence goes unnoticed. If three research schools cite each other but never engage a fourth, that fourth school is a blind spot — and the other three will never tell you about it.
+
+These aren't edge cases. They are the *default state* of knowledge. Every field, every topic, every country has them.
+
+Epistemix makes these gaps visible.
+
+**Reference scenarios:**
+- **[Amphipolis tomb excavation](https://en.wikipedia.org/wiki/Amphipolis)** (Greece, archaeology) — Rich multilingual scholarship, competing archaeological theories, documented citation islands between Greek and international research communities. All test fixtures and mock data use this scenario.
+- **[Antikythera mechanism](https://en.wikipedia.org/wiki/Antikythera_mechanism)** (Greece, archaeology/history of science) — Live validation scenario, tested Feb 2026 with 7 languages, 4 cycles, 50+ sources, 30+ scholars.
 
 ---
 
 ## How It Works
+
+Epistemix runs in iterative cycles. Each cycle generates hypotheses about what should exist, searches for it, extracts what it finds, and flags what's missing. Over multiple cycles, coverage converges.
 
 ```
 Topic + Country + Discipline
@@ -34,7 +52,7 @@ Topic + Country + Discipline
 │  DETECTION       │     citation islands, echo chambers
 └────────┬────────┘
          ▼
-┌─────────────────┐     Coverage = confirmed/total postulates
+┌─────────────────┐     Coverage = confirmed / total postulates
 │  COVERAGE        │◄─── (always a LOWER BOUND — denominator
 │  CALCULATION     │      grows as we discover more)
 └────────┬────────┘
@@ -50,7 +68,7 @@ Topic + Country + Discipline
 
 ### The 7 Meta-Axioms
 
-These are domain-independent truths about how academic research works:
+These are domain-independent structural properties of academic research. If a topic is sufficiently studied, all seven should hold. When one doesn't, that's a signal.
 
 | ID | Axiom | What it predicts |
 |----|-------|-----------------|
@@ -62,7 +80,9 @@ These are domain-independent truths about how academic research works:
 | MA-06 | Publication Channels | Multiple publication types exist (journals, conferences, grey lit) |
 | MA-07 | Temporal Evolution | Understanding has changed over decades |
 
-### Dual-Agent System
+### Dual-Agent Audit
+
+To guard against the system's own biases, Epistemix runs two independent agents with different axiom weightings, then compares their results.
 
 | Agent | Focus | High-weight axioms |
 |-------|-------|--------------------|
@@ -70,7 +90,21 @@ These are domain-independent truths about how academic research works:
 | Agent β (theoretical) | Theories, disciplines, temporal evolution | MA-03, MA-05, MA-07 |
 | Arbiter | Compares reports, promotes disagreements to **known unknowns** | — |
 
-**Combined coverage** = min(α, β). The **blindness gap** = max(α,β) - min(α,β).
+**Combined coverage** = min(α, β). The **blindness gap** = max(α, β) - min(α, β). Where the two agents disagree is where the real blind spots live.
+
+---
+
+## See It In Action
+
+```bash
+# Install (zero dependencies for the core library)
+pip install -e ".[dev]"
+
+# Run an audit in mock mode — no API calls, instant results
+epistemix --topic "Amphipolis tomb excavation" --country Greece --discipline archaeology -v
+```
+
+Output: postulates generated, multilingual queries executed, entities extracted, anomalies flagged, coverage calculated — all in under a second.
 
 ---
 
@@ -83,21 +117,21 @@ pip install -e ".[dev]"     # development (mock mode, zero API cost)
 pip install -e ".[live]"    # production (adds anthropic SDK)
 ```
 
-### Run (CLI)
+### CLI
 
 ```bash
-# Mock mode — no API calls, instant results
+# Mock mode — pattern-matched responses, no API calls
 epistemix --topic "Amphipolis tomb excavation" --country Greece --discipline archaeology -v
 
-# Live mode — real Claude API calls
+# Live mode — real Claude API calls with web search
 export ANTHROPIC_API_KEY="sk-ant-..."
 epistemix --topic "CRISPR gene editing" --country USA --discipline biology --live --budget 5.0 -v
 
-# Output to JSON file
+# Export to JSON
 epistemix --topic "Amphipolis tomb excavation" --country Greece --discipline archaeology -o report.json
 ```
 
-### Run (Python API)
+### Python API
 
 ```python
 from epistemix.connector import MockConnector
@@ -133,10 +167,10 @@ print(f"Blindness gap:  {result['combined']['blindness_gap']} points")
 print(f"Known unknowns: {result['combined']['known_unknowns']}")
 ```
 
-### Test
+### Tests
 
 ```bash
-pytest tests/ -v              # all 113 tests
+pytest tests/ -v              # all 138 tests
 pytest tests/test_core.py -v  # just core engine tests
 pytest tests/ -v --tb=short   # short traceback on failure
 ```
@@ -145,7 +179,7 @@ pytest tests/ -v --tb=short   # short traceback on failure
 
 ## Web Application
 
-The web app provides a complete UI for running audits with real-time progress.
+The web app provides a full interface for running audits with real-time progress updates.
 
 ### Pages
 
@@ -177,13 +211,13 @@ The web app provides a complete UI for running audits with real-time progress.
 | `GET` | `/api/v1/audits/:id` | Get audit status + results |
 | `POST` | `/api/v1/audits/:id` | Stop an audit (`{action: "stop"}`) |
 
-See [API.md](API.md) for full reference.
+See [docs/API.md](docs/API.md) for the full reference.
 
 ---
 
 ## Architecture
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete technical architecture.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the complete technical architecture.
 
 ### Stack
 
@@ -196,7 +230,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete technical architecture.
 | AI provider | Anthropic Claude API | Via `connector.py` abstraction (swappable) |
 | CI/CD | GitHub Actions | Native, free |
 
-### Cost
+### Cost at Scale
 
 | Scale | Monthly cost |
 |-------|-------------|
@@ -211,22 +245,23 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete technical architecture.
 
 ```
 epistemix/
-├── src/epistemix/           # Core Python library
+├── src/epistemix/           # Core Python library (zero external dependencies)
 │   ├── models.py            # Data structures (Finding, Postulate, Anomaly, Query, etc.)
 │   ├── meta_axioms.py       # 7 Level 0 meta-axioms
 │   ├── citation_graph.py    # BFS school detection, citation islands
 │   ├── disciplines.py       # Evidence → discipline mapping
 │   ├── content_analysis.py  # Structural absence, convergence, empty queries
-│   ├── connector.py         # MockConnector / ClaudeConnector
-│   ├── core.py              # EpistemicEngine (607 lines — the brain)
+│   ├── connector.py         # MockConnector / ClaudeConnector (swappable)
+│   ├── core.py              # EpistemicEngine — the main audit orchestrator
 │   ├── multi_agent.py       # Agent α, Agent β, Arbiter
-│   └── run.py               # CLI
-├── tests/                   # 113 tests
-├── web/                     # Next.js frontend
-├── worker/                  # Fly.io worker
+│   └── run.py               # CLI entry point
+├── tests/                   # 138 tests (pytest, zero API cost)
+├── web/                     # Next.js 15 frontend (Vercel)
+├── worker/                  # Python audit worker (Fly.io, scale-to-zero)
 ├── supabase/                # DB migrations + Edge Functions
-├── .github/workflows/       # CI/CD
-└── docker-compose.yml       # Local dev
+├── docs/                    # Architecture, API, deployment, contributing
+├── .github/workflows/       # CI/CD pipelines
+└── docker-compose.yml       # Local development
 ```
 
 ---
@@ -236,12 +271,11 @@ epistemix/
 | Document | Purpose |
 |----------|---------|
 | [CLAUDE.md](CLAUDE.md) | Project context for Claude Code instances |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Technical architecture and design decisions |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to develop, test, and contribute |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Step-by-step deployment guide |
-| [API.md](API.md) | REST API reference |
-| [TODO.md](TODO.md) | Current status and roadmap |
-| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture and design decisions |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | How to develop, test, and contribute |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Step-by-step deployment guide |
+| [docs/API.md](docs/API.md) | REST API reference |
+| [docs/PLAN.md](docs/PLAN.md) | Project plan and roadmap |
 
 ---
 

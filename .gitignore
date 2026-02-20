@@ -38,3 +38,9 @@ web/.vercel
 .vscode/
 *.swp
 *.swo
+
+# Claude Code
+.claude/
+
+# Build artifacts
+web/tsconfig.tsbuildinfo

@@ -22,7 +22,7 @@ cd epistemix
 # Install Python core in dev mode
 pip install -e ".[dev]"
 
-# Run all 113 tests (should take <1 second)
+# Run all 138 tests (should take <1 second)
 pytest tests/ -v
 
 # Install web app (optional — only if working on frontend)
@@ -62,7 +62,7 @@ docker-compose up supabase-db
 
 5. **MockConnector for all tests.** No test should require an API key or network access. Use pattern-matched canned responses.
 
-6. **Tests must pass before commits.** Run `pytest tests/ -v` and ensure 113/113 pass (or more, if you add tests).
+6. **Tests must pass before commits.** Run `pytest tests/ -v` and ensure 138/138 pass (or more, if you add tests).
 
 ### Web App Rules
 
