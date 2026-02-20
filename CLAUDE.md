@@ -61,6 +61,14 @@ epistemix/
 │   └── functions/
 │       └── trigger-worker/  # Edge Function: new audit → start Fly.io machine
 │
+├── docs/                    # Documentation & reference material
+│   ├── API.md               # API reference
+│   ├── ARCHITECTURE.md      # System architecture
+│   ├── CONTRIBUTING.md      # Contributor guide
+│   ├── DEPLOYMENT.md        # Deployment guide
+│   ├── PLAN.md              # Project plan
+│   └── ...                  # Business docs, session transcripts
+│
 └── .github/workflows/       # CI + deploy pipelines
 ```
 
