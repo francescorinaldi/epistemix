@@ -1,0 +1,97 @@
+"""Tests for the connector module."""
+
+from epistemix.connector import MockConnector, extract_json
+from epistemix.models import Finding, GapType, SearchQuery, Severity
+
+
+class TestMockConnector:
+    def test_register_and_execute(self):
+        connector = MockConnector()
+        connector.register_findings("amphipolis", [
+            Finding(source="Paper A", language="en", author="Alice"),
+        ])
+        query = SearchQuery(
+            query="Amphipolis tomb research",
+            language="en",
+        )
+        findings = connector.execute_query(query)
+        assert len(findings) == 1
+        assert findings[0].author == "Alice"
+        assert query.executed is True
+
+    def test_no_match_returns_empty(self):
+        connector = MockConnector()
+        query = SearchQuery(query="unrelated topic", language="en")
+        findings = connector.execute_query(query)
+        assert len(findings) == 0
+
+    def test_case_insensitive_matching(self):
+        connector = MockConnector()
+        connector.register_findings("AMPHIPOLIS", [
+            Finding(source="Paper", language="en"),
+        ])
+        query = SearchQuery(query="amphipolis research", language="en")
+        findings = connector.execute_query(query)
+        assert len(findings) == 1
+
+    def test_execute_batch(self):
+        connector = MockConnector()
+        connector.register_findings("topic", [
+            Finding(source="P1", language="en"),
+        ])
+        queries = [
+            SearchQuery(query="topic one", language="en"),
+            SearchQuery(query="topic two", language="en"),
+        ]
+        findings = connector.execute_batch(queries)
+        assert len(findings) == 2
+
+    def test_batch_with_limit(self):
+        connector = MockConnector()
+        connector.register_findings("topic", [
+            Finding(source="P", language="en"),
+        ])
+        queries = [
+            SearchQuery(query="topic 1", language="en"),
+            SearchQuery(query="topic 2", language="en"),
+            SearchQuery(query="topic 3", language="en"),
+        ]
+        findings = connector.execute_batch(queries, limit=2)
+        assert connector.call_count == 2
+
+    def test_total_cost_is_zero(self):
+        connector = MockConnector()
+        assert connector.total_cost == 0.0
+
+    def test_call_log(self):
+        connector = MockConnector()
+        q = SearchQuery(query="test", language="en")
+        connector.execute_query(q)
+        assert len(connector.call_log) == 1
+
+
+class TestExtractJson:
+    def test_json_block(self):
+        text = '```json\n[{"key": "value"}]\n```'
+        result = extract_json(text)
+        assert result == [{"key": "value"}]
+
+    def test_bare_json_object(self):
+        text = 'Some text {"key": "value"} more text'
+        result = extract_json(text)
+        assert result == {"key": "value"}
+
+    def test_bare_json_array(self):
+        text = 'Text [1, 2, 3] more'
+        result = extract_json(text)
+        assert result == [1, 2, 3]
+
+    def test_no_json(self):
+        text = "No json here at all"
+        result = extract_json(text)
+        assert result is None
+
+    def test_invalid_json(self):
+        text = "```json\n{invalid}\n```"
+        result = extract_json(text)
+        assert result is None

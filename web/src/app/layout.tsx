@@ -1,0 +1,50 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Epistemix — Epistemic Audit Framework",
+  description:
+    "Detect unknown unknowns in research. Predict what knowledge should exist, then verify whether it does.",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <div id="app">{children}</div>
+        <style jsx global>{`
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          html {
+            color-scheme: dark;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+              Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #030712;
+            color: #e2e8f0;
+            min-height: 100vh;
+          }
+          #app {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+          }
+          a {
+            color: #6366f1;
+            text-decoration: none;
+          }
+          a:hover {
+            text-decoration: underline;
+          }
+        `}</style>
+      </body>
+    </html>
+  );
+}

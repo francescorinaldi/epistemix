@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "epistemix"
+version = "0.1.0"
+description = "Epistemic audit framework — detect unknown unknowns in research"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = []
+
+[project.optional-dependencies]
+live = ["anthropic>=0.39.0"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+
+[project.scripts]
+epistemix = "epistemix.run:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/epistemix"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
