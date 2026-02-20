@@ -17,7 +17,20 @@ export default function NewAuditPage() {
   }, [user, loading, router]);
 
   if (loading) {
-    return <div className="loading">Loading...</div>;
+    return (
+      <>
+        <div className="loading">Loading...</div>
+        <style jsx>{`
+          .loading {
+            text-align: center;
+            padding: 4rem;
+            font-family: var(--font-mono);
+            font-size: 0.8125rem;
+            color: var(--text-tertiary);
+          }
+        `}</style>
+      </>
+    );
   }
 
   return (
@@ -39,38 +52,42 @@ export default function NewAuditPage() {
 
       <style jsx>{`
         main {
-          max-width: 640px;
+          max-width: 600px;
           margin: 0 auto;
-          padding: 0 1.5rem 4rem;
+          padding: 0 2rem 4rem;
         }
         nav {
           padding: 1.5rem 0;
         }
-        .back {
-          color: #94a3b8;
-          font-size: 0.875rem;
+        nav :global(.back) {
+          font-family: var(--font-mono);
+          font-size: 0.8125rem;
+          color: var(--text-tertiary);
+          text-decoration: none;
+          transition: color 0.2s;
+        }
+        nav :global(.back:hover) {
+          color: var(--text-primary);
         }
         .content {
           padding-top: 2rem;
         }
         h1 {
-          font-size: 1.75rem;
-          font-weight: 700;
+          font-family: var(--font-display);
+          font-size: 2rem;
+          font-weight: 400;
           text-align: center;
+          color: var(--text-heading);
           margin-bottom: 0.5rem;
         }
         .subtitle {
           text-align: center;
-          color: #94a3b8;
+          color: var(--text-secondary);
           max-width: 440px;
-          margin: 0 auto 2.5rem;
+          margin: 0 auto 3rem;
+          font-family: var(--font-body);
           font-size: 0.9375rem;
-          line-height: 1.5;
-        }
-        .loading {
-          text-align: center;
-          padding: 4rem;
-          color: #64748b;
+          line-height: 1.6;
         }
       `}</style>
     </main>

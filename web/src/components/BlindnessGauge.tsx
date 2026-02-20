@@ -83,20 +83,24 @@ export default function BlindnessGauge({ result }: Props) {
 
       <style jsx>{`
         .gauge {
-          background: #0f172a;
-          border: 1px solid #1e293b;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: 1.5rem;
         }
         h3 {
-          color: #e2e8f0;
-          font-size: 1rem;
+          font-family: var(--font-display);
+          font-size: 1.125rem;
+          color: var(--text-heading);
           margin: 0 0 1rem 0;
+          font-weight: 400;
         }
         h4 {
-          color: #e2e8f0;
-          font-size: 0.875rem;
+          font-family: var(--font-display);
+          font-size: 1rem;
+          color: var(--text-heading);
           margin: 0 0 0.5rem 0;
+          font-weight: 400;
         }
         .meters {
           display: flex;
@@ -107,36 +111,38 @@ export default function BlindnessGauge({ result }: Props) {
         .meter-label {
           display: flex;
           justify-content: space-between;
-          font-size: 0.8125rem;
-          color: #94a3b8;
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+          color: var(--text-tertiary);
           margin-bottom: 0.25rem;
         }
         .value {
+          font-family: var(--font-mono);
           font-weight: 700;
-          color: #e2e8f0;
+          color: var(--text-heading);
         }
         .combined-value {
-          color: #f97316;
+          color: var(--accent);
         }
         .bar {
-          height: 8px;
-          background: #1e293b;
-          border-radius: 4px;
+          height: 5px;
+          background: var(--bg-hover);
+          border-radius: 3px;
           overflow: hidden;
         }
         .fill {
           height: 100%;
-          border-radius: 4px;
+          border-radius: 3px;
           transition: width 0.5s ease;
         }
         .fill.alpha {
-          background: #6366f1;
+          background: var(--chart-1);
         }
         .fill.beta {
-          background: #8b5cf6;
+          background: var(--chart-4);
         }
         .fill.combined {
-          background: #f97316;
+          background: var(--accent);
         }
         .stats {
           display: grid;
@@ -147,44 +153,50 @@ export default function BlindnessGauge({ result }: Props) {
         .stat {
           text-align: center;
           padding: 0.75rem;
-          background: #1e293b;
-          border-radius: 0.5rem;
+          background: var(--bg-elevated);
+          border-radius: var(--radius-md);
         }
         .stat.blindness {
-          border: 1px solid #f97316;
+          border: 1px solid var(--accent-border);
         }
         .stat-value {
-          font-size: 1.5rem;
+          font-family: var(--font-mono);
+          font-size: 1.25rem;
           font-weight: 700;
-          color: #e2e8f0;
+          color: var(--text-heading);
         }
         .blindness .stat-value {
-          color: #f97316;
+          color: var(--accent);
         }
         .stat-label {
-          font-size: 0.6875rem;
-          color: #64748b;
+          font-family: var(--font-mono);
+          font-size: 0.5625rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--text-tertiary);
           margin-top: 0.125rem;
         }
         .unknowns {
-          border-top: 1px solid #1e293b;
+          border-top: 1px solid var(--border-subtle);
           padding-top: 1rem;
+          margin-top: 0.5rem;
         }
         .unknown {
           display: flex;
           gap: 0.5rem;
           padding: 0.375rem 0;
-          font-size: 0.8125rem;
         }
         .unknown-severity {
-          color: #f87171;
+          font-family: var(--font-mono);
+          font-size: 0.625rem;
           font-weight: 600;
           text-transform: uppercase;
-          font-size: 0.6875rem;
+          color: var(--danger);
           min-width: 4rem;
         }
         .unknown-desc {
-          color: #cbd5e1;
+          font-size: 0.8125rem;
+          color: var(--text-secondary);
         }
       `}</style>
     </div>

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Epistemix — Epistemic Audit Framework",
+  title: "Epistemix — Map the boundaries of knowledge",
   description:
-    "Detect unknown unknowns in research. Predict what knowledge should exist, then verify whether it does.",
+    "Epistemic audit framework that detects unknown unknowns in research. Predict what knowledge should exist, then verify whether it does.",
 };
 
 export default function RootLayout({

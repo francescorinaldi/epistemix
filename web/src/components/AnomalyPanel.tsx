@@ -7,9 +7,9 @@ interface Props {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-  critical: { bg: "#450a0a", border: "#991b1b", text: "#fca5a5", icon: "!!" },
-  high: { bg: "#451a03", border: "#92400e", text: "#fed7aa", icon: "!" },
-  medium: { bg: "#1a2332", border: "#334155", text: "#94a3b8", icon: "~" },
+  critical: { bg: "var(--danger-bg)", border: "var(--danger)", text: "var(--danger)", icon: "!!" },
+  high: { bg: "var(--warning-bg)", border: "var(--warning)", text: "var(--warning)", icon: "!" },
+  medium: { bg: "rgba(255,255,255,0.02)", border: "var(--text-ghost)", text: "var(--text-secondary)", icon: "~" },
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -100,10 +100,10 @@ export default function AnomalyPanel({ anomalies }: Props) {
 
       <style jsx>{`
         .panel {
-          background: #0f172a;
-          border: 1px solid #1e293b;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: 1.5rem;
         }
         .header {
           display: flex;
@@ -112,31 +112,35 @@ export default function AnomalyPanel({ anomalies }: Props) {
           margin-bottom: 1rem;
         }
         h3 {
-          color: #e2e8f0;
-          font-size: 1rem;
-          margin: 0;
+          font-family: var(--font-display);
+          font-size: 1.125rem;
+          color: var(--text-heading);
+          margin: 0 0 1rem 0;
+          font-weight: 400;
         }
         .badges {
           display: flex;
           gap: 0.5rem;
         }
         .badge {
-          font-size: 0.75rem;
+          font-family: var(--font-mono);
+          font-size: 0.625rem;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
           padding: 0.125rem 0.5rem;
           border-radius: 999px;
-          font-weight: 600;
         }
         .badge.critical {
-          background: #450a0a;
-          color: #fca5a5;
+          background: var(--danger-bg);
+          color: var(--danger);
         }
         .badge.high {
-          background: #451a03;
-          color: #fed7aa;
+          background: var(--warning-bg);
+          color: var(--warning);
         }
         .badge.medium {
-          background: #1a2332;
-          color: #94a3b8;
+          background: rgba(255,255,255,0.03);
+          color: var(--text-tertiary);
         }
         .list {
           display: flex;
@@ -155,23 +159,26 @@ export default function AnomalyPanel({ anomalies }: Props) {
         }
         .icon {
           font-weight: 700;
-          font-family: monospace;
+          font-family: var(--font-mono);
         }
         .type {
-          color: #e2e8f0;
+          font-family: var(--font-body);
           font-weight: 600;
-          font-size: 0.875rem;
+          font-size: 0.8125rem;
+          color: var(--text-heading);
         }
         .severity {
-          font-size: 0.75rem;
+          font-family: var(--font-mono);
+          font-size: 0.625rem;
           text-transform: uppercase;
+          letter-spacing: 0.06em;
           margin-left: auto;
         }
         .description {
-          color: #cbd5e1;
           font-size: 0.8125rem;
+          color: var(--text-secondary);
+          line-height: 1.5;
           margin: 0;
-          line-height: 1.4;
         }
         .suggestions {
           display: flex;
@@ -180,14 +187,16 @@ export default function AnomalyPanel({ anomalies }: Props) {
           margin-top: 0.5rem;
         }
         .suggestion {
-          font-size: 0.6875rem;
-          background: rgba(99, 102, 241, 0.15);
-          color: #a5b4fc;
-          padding: 0.125rem 0.5rem;
+          font-family: var(--font-mono);
+          font-size: 0.625rem;
+          background: var(--accent-bg);
+          color: var(--accent-dim);
+          border: 1px solid var(--accent-border);
           border-radius: 999px;
+          padding: 0.125rem 0.5rem;
         }
         .empty {
-          color: #64748b;
+          color: var(--text-ghost);
           text-align: center;
           padding: 2rem;
         }

@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -69,7 +69,7 @@ export default function LoginPage() {
         </form>
 
         <p className="toggle">
-          {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+          {isSignUp ? "Already have an account?" : "Don\u2019t have an account?"}{" "}
           <button
             className="link"
             onClick={() => {
@@ -96,44 +96,50 @@ export default function LoginPage() {
         }
         h1 {
           text-align: center;
-          font-size: 2rem;
-          font-weight: 800;
-          color: #6366f1;
+          font-family: var(--font-display);
+          font-size: 2.25rem;
+          font-weight: 400;
+          color: var(--text-heading);
           margin-bottom: 0.5rem;
         }
         .subtitle {
           text-align: center;
-          color: #94a3b8;
+          font-family: var(--font-body);
+          font-size: 0.9375rem;
+          color: var(--text-tertiary);
           margin-bottom: 2rem;
         }
         .google-btn {
           width: 100%;
           padding: 0.75rem;
-          border: 1px solid #334155;
-          border-radius: 0.5rem;
-          background: #1e293b;
-          color: #e2e8f0;
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-md);
+          background: var(--bg-elevated);
+          color: var(--text-primary);
+          font-family: var(--font-body);
           font-size: 0.9375rem;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: border-color 0.2s, background 0.2s;
         }
         .google-btn:hover {
-          background: #334155;
+          border-color: var(--accent-border);
+          background: var(--bg-hover);
         }
         .divider {
           display: flex;
           align-items: center;
           gap: 1rem;
           margin: 1.5rem 0;
-          color: #64748b;
-          font-size: 0.8125rem;
+          color: var(--text-ghost);
+          font-family: var(--font-mono);
+          font-size: 0.6875rem;
         }
         .divider::before,
         .divider::after {
           content: "";
           flex: 1;
           height: 1px;
-          background: #334155;
+          background: var(--border-subtle);
         }
         form {
           display: flex;
@@ -141,48 +147,58 @@ export default function LoginPage() {
           gap: 0.75rem;
         }
         input {
-          padding: 0.625rem 0.75rem;
-          border: 1px solid #334155;
-          border-radius: 0.5rem;
-          background: #1e293b;
-          color: #f1f5f9;
+          padding: 0.75rem 0.875rem;
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-sm);
+          background: var(--bg-card);
+          color: var(--text-heading);
+          font-family: var(--font-body);
           font-size: 0.9375rem;
+          transition: border-color 0.2s, box-shadow 0.2s;
         }
         input:focus {
           outline: none;
-          border-color: #6366f1;
+          border-color: var(--accent);
+          box-shadow: 0 0 0 2px var(--accent-bg);
         }
         button[type="submit"] {
+          width: 100%;
           padding: 0.75rem;
           border: none;
-          border-radius: 0.5rem;
-          background: #6366f1;
-          color: white;
+          border-radius: var(--radius-md);
+          background: var(--accent);
+          color: #0b0e15;
+          font-family: var(--font-body);
+          font-size: 0.9375rem;
           font-weight: 600;
           cursor: pointer;
+          transition: filter 0.2s;
         }
         button[type="submit"]:hover:not(:disabled) {
-          background: #4f46e5;
+          filter: brightness(1.1);
         }
-        button:disabled {
+        button[type="submit"]:disabled {
           opacity: 0.5;
+          cursor: not-allowed;
         }
         .error {
-          color: #f87171;
-          font-size: 0.875rem;
+          color: var(--danger);
+          font-size: 0.8125rem;
+          margin: 0;
         }
         .toggle {
           text-align: center;
           margin-top: 1.5rem;
-          color: #94a3b8;
-          font-size: 0.875rem;
+          font-size: 0.8125rem;
+          color: var(--text-tertiary);
         }
         .link {
           background: none;
           border: none;
-          color: #6366f1;
+          color: var(--accent);
           cursor: pointer;
-          font-size: 0.875rem;
+          font-size: 0.8125rem;
+          padding: 0;
         }
       `}</style>
     </main>
