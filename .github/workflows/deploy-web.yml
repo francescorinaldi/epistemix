@@ -1,0 +1,20 @@
+name: Deploy Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/deploy-web.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vercel handles deployment automatically via GitHub integration.
+      # This workflow is a placeholder for additional deployment steps
+      # (e.g., running migrations, notifying Slack, etc.)
+      - name: Deploy notification
+        run: echo "Web deployment triggered. Vercel will handle the rest."

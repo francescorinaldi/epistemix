@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -10,12 +11,30 @@ build/
 .venv/
 venv/
 env/
-.env
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 htmlcov/
 .coverage
 coverage.xml
-*.log
+
+# Node / Next.js
+node_modules/
+web/.next/
+web/out/
+web/.vercel
+
+# Environment (secrets)
+.env
+.env.local
+.env.*.local
+
+# OS
 .DS_Store
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

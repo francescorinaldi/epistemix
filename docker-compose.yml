@@ -1,0 +1,45 @@
+# Local development setup
+# Run: docker-compose up
+#
+# This starts Supabase locally and a development worker.
+# The Next.js app runs separately with `cd web && npm run dev`.
+
+version: "3.9"
+
+services:
+  # Supabase local development (database + auth + realtime)
+  supabase-db:
+    image: supabase/postgres:15.1.1.61
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - supabase-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Worker for local development
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      - AUDIT_ID=local-test
+      - AUDIT_TOPIC=Amphipolis tomb excavation
+      - AUDIT_COUNTRY=Greece
+      - AUDIT_DISCIPLINE=archaeology
+      - AUDIT_MAX_CYCLES=2
+      - SUPABASE_URL=http://supabase-db:5432
+      - SUPABASE_SERVICE_ROLE_KEY=local-dev-key
+      # Set ANTHROPIC_API_KEY in .env for live mode
+    profiles:
+      - worker  # Only start with: docker-compose --profile worker up
+
+volumes:
+  supabase-data:

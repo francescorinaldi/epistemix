@@ -1,0 +1,15 @@
+# Fly.io configuration for Epistemix worker
+# These machines are started on-demand and auto-destroy when done.
+# No always-on processes — scale to zero.
+
+app = "epistemix-worker"
+primary_region = "ams"
+
+[build]
+  dockerfile = "../Dockerfile"
+
+# No HTTP service — this is a one-shot worker, not a web server
+# Machines are created via the Machines API from the edge function
+
+[env]
+  PYTHONUNBUFFERED = "1"
