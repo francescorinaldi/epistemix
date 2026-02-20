@@ -163,6 +163,99 @@ class Expectation:
 
 
 @dataclass
+class WeightedPostulate:
+    """A postulate with confidence tracking and temporal decay.
+
+    Confidence reflects how well-supported a postulate is:
+      - source_count: independent sources confirming it
+      - language_spread: number of distinct languages
+      - confidence: composite score (0.0–1.0)
+      - last_confirmed_cycle: when last supported by a finding
+      - decay_rate: per-month confidence decay (domain-dependent)
+
+    Confidence thresholds drive query strategy:
+      < 0.2  → VERIFY (generate confirmation queries)
+      0.2–0.6 → STANDARD
+      0.6–0.9 → RELIABLE (generate deepening queries)
+      ≥ 0.9  → CONSOLIDATED
+    """
+    description: str
+    meta_axiom_id: str = ""
+    source_count: int = 0
+    language_spread: int = 0
+    confidence: float = 0.5
+    last_confirmed_cycle: int = 0
+    decay_rate: float = 0.02
+
+    def effective_confidence(
+        self,
+        current_cycle: int,
+        cycles_per_month: float = 2.0,
+    ) -> float:
+        """Confidence with temporal decay applied."""
+        if self.decay_rate == 0 or current_cycle <= self.last_confirmed_cycle:
+            return self.confidence
+        months = (current_cycle - self.last_confirmed_cycle) / cycles_per_month
+        return self.confidence * ((1 - self.decay_rate) ** months)
+
+    @property
+    def action(self) -> str:
+        """Query strategy based on confidence level."""
+        if self.confidence < 0.2:
+            return "VERIFY"
+        elif self.confidence < 0.6:
+            return "STANDARD"
+        elif self.confidence < 0.9:
+            return "RELIABLE"
+        return "CONSOLIDATED"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "description": self.description,
+            "meta_axiom_id": self.meta_axiom_id,
+            "source_count": self.source_count,
+            "language_spread": self.language_spread,
+            "confidence": round(self.confidence, 3),
+            "last_confirmed_cycle": self.last_confirmed_cycle,
+            "decay_rate": self.decay_rate,
+            "action": self.action,
+        }
+
+
+@dataclass
+class NegativePostulate:
+    """Evidence of absence — a query that found nothing.
+
+    When queries return zero results, the void is structured as a
+    NegativePostulate with hypotheses about why:
+      - access_barrier: walled-garden ecosystem (CNKI, etc.)
+      - wrong_terminology: terms don't match local usage
+      - genuinely_absent: the knowledge doesn't exist
+      - wrong_language: topic not studied in this language
+
+    The reformulation field suggests how to retry in the next cycle.
+    """
+    query_text: str
+    language: str
+    expected_by: str = ""
+    attempts: int = 1
+    possible_reason: str = ""
+    reformulation: str = ""
+    detected_at_cycle: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "query_text": self.query_text,
+            "language": self.language,
+            "expected_by": self.expected_by,
+            "attempts": self.attempts,
+            "possible_reason": self.possible_reason,
+            "reformulation": self.reformulation,
+            "detected_at_cycle": self.detected_at_cycle,
+        }
+
+
+@dataclass
 class Finding:
     """A research finding from a search query.
 
@@ -284,6 +377,10 @@ class CycleSnapshot:
     coverage_score: float
     new_entities_discovered: list = field(default_factory=list)
     queries_generated: int = 0
+    # v3: weighted postulate metrics
+    weighted_postulates_count: int = 0
+    avg_confidence: float = 0.0
+    negative_postulates_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -295,6 +392,9 @@ class CycleSnapshot:
             "anomalies": self.n_anomalies,
             "new_entities": self.new_entities_discovered,
             "queries_generated": self.queries_generated,
+            "weighted_postulates": self.weighted_postulates_count,
+            "avg_confidence": round(self.avg_confidence, 3),
+            "negative_postulates": self.negative_postulates_count,
         }
 
 

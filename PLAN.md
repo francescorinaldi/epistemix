@@ -1,181 +1,323 @@
-# Epistemix Implementation Plan
+# Epistemix Development Plan
 
-## Overview
+## Current State (v0.2.0 — Feb 2026)
 
-Build the complete Epistemix Epistemic Audit Framework — a system for detecting "unknown unknowns" in research by predicting what knowledge should exist, then verifying whether it does.
+**Core library:** 10 Python modules, 105 tests passing, zero external deps.
+**Production stack:** Next.js 15 web app, Fly.io worker, Supabase database, CI/CD.
+**Live test:** Validated on Antikythera mechanism (Opus 4.6 Extended, Feb 20 2026).
+**Copilot review:** 9 production bugs fixed (RLS, billing, worker imports, etc).
 
-**Target:** ~170KB of Python across 9 source files + 2 test files, Python 3.10+, no external deps beyond `anthropic` (optional, for live use).
+### Live Test Results (Antikythera Mechanism)
+
+The first live test with Claude web search confirmed the core thesis:
+**monolingual coverage creates an illusion of completeness.**
+
+Key findings:
+- ~85% of principal scholars found with English-only coverage
+- 5 specific gaps invisible to monolingual search:
+  - Swiss excavation campaign (French sources)
+  - Italian school: Pastore, Rossi (Italian sources)
+  - Skeptical voice: Lequèvre (French critique)
+  - Olbia mechanism predecessor (French sources)
+  - Arab-Islamic and Chinese transmission traditions
+- Cycle 3 queries were surgical: Arabic on al-Biruni, Chinese on ancient
+  astronomical instruments, Italian on Pastore, French on Lequèvre
+- **Cycle 4 spontaneously generated domain-specific axioms** not in the 7 meta-axioms:
+  - Disciplinary axiom: "where are the metallurgists, mechanical engineers?"
+  - Access axiom: "who controls physical access to the fragments?"
+  - Predecessor axiom: "too sophisticated to be a first attempt — where are predecessors?"
+  - Social context axiom: "for whom was it built? economic/political role?"
+  - Competing reconstructions axiom: "how many models exist, where do they diverge?"
+  - Babylonian axiom: "the cycles are Babylonian — who studies the transmission?"
+
+This last observation — the LLM generating novel axioms — validates Phase 8 (auto-audit)
+as a natural capability, not just a theoretical idea.
 
 ---
 
-## Project Structure
+## v3 Roadmap (8 Phases)
+
+### Conceptual Leap: v2 → v3
+
+| Dimension | v2 | v3 |
+|-----------|----|----|
+| Postulates | Dynamic, auto-discovered | Relational + confidence + decay |
+| Entities | Discovered by keyword | Extracted with semantic relations |
+| Time | None | Temporal evolution, decay |
+| Memory | None | Cross-session persistence |
+| Languages | en, el, de, fr, it | + ar, zh + access-barrier axioms |
+| Multi-agent | 2 fixed agents | N agents, generative axioms |
+| Auto-audit | None | System audits its own axioms |
+
+---
+
+### Phase 1: Weighted Postulates (confidence scores)
+
+**Priority:** HIGH — Foundation for phases 2, 5, 7.
+**Effort:** Small — extend `DynamicPostulates` in `core.py`.
+**Depends on:** Nothing.
+
+Add `WeightedPostulate` with confidence scoring:
+- `confidence: float` (0.0–1.0) based on source count, language spread, recency, authority
+- `source_count`, `language_spread`, `last_confirmed`
+- Retrofit: every v2 postulate becomes weighted with confidence=0.5
+
+Confidence thresholds drive query strategy:
+- < 0.2: VERIFICA — generate confirmation/refutation queries
+- 0.2–0.6: STANDARD — normal expectations
+- 0.6–0.9: AFFIDABILE — generate deepening queries
+- > 0.9: CONSOLIDATO — quasi-fact, strong constraint
+
+**Test:** Amphipolis postulates should reach different confidence levels.
+Peristeri (many sources, multiple languages) → high confidence.
+Dendrinos (single source) → low confidence, triggers verification query.
+
+---
+
+### Phase 2: Negative Postulates (query-void feedback loop)
+
+**Priority:** HIGH — currently content_analysis detects empty queries but doesn't feed back.
+**Effort:** Small — extend `content_analysis.py`, wire to `DynamicPostulates`.
+**Depends on:** Nothing.
+
+When a query returns zero results, generate a `NegativePostulate`:
+- `query`, `language`, `expected_by` (which axiom), `attempts`
+- `possible_reasons`: access_barrier, genuinely_absent, wrong_terminology, wrong_language
+- Reasons are tested in subsequent cycles with reformulated queries
+
+**Test:** German query on Amphipolis returning nothing → generates NegativePostulate →
+next cycle reformulates with alternative terminology.
+
+---
+
+### Phase 3: Semantic Relation Graph
+
+**Priority:** HIGH — the qualitative leap. Replaces `citation_graph.py`.
+**Effort:** Large — new `semantic_graph.py`, LLM extraction prompts in connector.
+**Depends on:** Connector changes for relation extraction.
+
+New `RelationType` enum: SUPPORTS, CONTESTS, CITES, EXTENDS, SUPERVISES, COAUTHORS.
+
+`SemanticRelation` dataclass: source, target, relation, confidence, evidence, timestamp.
+
+Extraction via LLM: for each finding, Claude extracts relationships with evidence quotes.
+
+Automated inferences from the typed graph:
+- Schools of thought = clusters of mutual SUPPORTS
+- Lines of fracture = CONTESTS pairs
+- Authority = high in-degree CITES nodes
+- Isolation = scholars with no relations (independent voices or gaps)
+- Influence chains = A supervises B, B extends C
+
+Coverage v3 includes a relational component: not enough to find 10 scholars;
+must verify their relationships are mapped. Unmapped pairs get flagged.
+
+**Test:** Amphipolis graph should distinguish Mavrogiannis-contests-Peristeri
+from Chugg-cites-Peristeri. Tiverios should appear as an isolated voice.
+
+---
+
+### Phase 4: Arabic + Chinese with Access-Barrier Axioms
+
+**Priority:** MEDIUM — validated by live test (Antikythera showed the need).
+**Effort:** Medium — extend `core.py` + `QueryLanguage` enum + new `AccessBarrierAxiom`.
+**Depends on:** Phase 2 (negative postulates needed for barrier detection).
+
+New `AccessBarrierAxiom` per language:
+- `ecosystem`: open_web, walled_garden, hybrid
+- `primary_databases`: CNKI/Wanfang for zh, Shamaa/E-Marefa for ar
+- `searchable_via_google`: 0.25 for zh, 0.5 for ar
+- `bilingual_pattern`: ar has ar_local/en_international
+
+Impact on coverage: zero results in walled_garden ecosystem → annotate
+"coverage not evaluable via web search" instead of penalizing.
+
+Query generation adaptations:
+- Chinese: natural phrases (no word-separated keywords)
+- Arabic: include morphological variants (triliteral roots)
+
+**Test:** Audit on a topic with strong Chinese component (e.g., SARS-CoV-2 origins).
+
+---
+
+### Phase 5: Cross-Session Memory (`knowledge_store.py`)
+
+**Priority:** MEDIUM — the moat. Accumulated axioms are the defensible asset.
+**Effort:** Medium — new persistence module + schema.
+**Depends on:** Phases 1-2.
+
+Persistent artifacts per domain:
+- Level 1 axioms discovered
+- Relation graph (accumulated)
+- Negative postulates (confirmed)
+- Calibrations (thresholds, decay rate, weights)
+- Session history
+
+Warm start: new audit on a known domain loads pre-existing axioms,
+graph, and calibrations. Cycle 0 starts from a base, not from zero.
+
+Cross-domain transfer: axioms transferable between similar domains
+with low initial confidence (0.3), must be verified in first cycle.
+E.g., archaeology Greece → archaeology Egypt: "national school pattern" hypothesis.
+
+Storage: SQLite for dev, Supabase/PostgreSQL for production.
+
+**Test:** Run Amphipolis audit, then Antikythera audit.
+Second audit should start with archaeological axioms already known.
+
+---
+
+### Phase 6: Generative Multi-Agent
+
+**Priority:** LOW — ambitious, needs phases 1-3 first.
+**Effort:** Large — LLM-dependent agent generation.
+**Depends on:** Phase 3 (semantic graph), Phase 1 (confidence).
+
+`AgentFactory`: when α and β agree on a gap but diverge on cause,
+generate a third agent with LLM-designed axioms for that divergence.
+
+`MetaPostulate`: when discrepancy persists after third agent,
+explicit declaration that current axioms are insufficient.
+Suggests external intervention type: domain expert review,
+primary source access, field research required.
+
+Limit: max 1 generated agent per session (cost control).
+
+**Test:** Amphipolis — when α and β diverge on the occupant question,
+generate a "forensic evidence" agent focused on osteological data.
+
+---
+
+### Phase 7: Temporal Decay
+
+**Priority:** HIGH — very small once Phase 1 exists.
+**Effort:** Small — add decay to `WeightedPostulate`.
+**Depends on:** Phase 1.
+
+`decay_rate: float` (per month), configurable by domain:
+- Archaeology: 0.02 (slow, knowledge changes slowly)
+- Finance: 0.15 (fast, markets change rapidly)
+- Virology: 0.10 (moderate, new findings frequent)
+
+`effective_confidence(now)` = confidence × (1 - decay_rate) ^ months_since_last_confirmed
+
+Postulates not confirmed by recent sources lose influence.
+They don't disappear — they become weak hypotheses.
+
+**Test:** A postulate last confirmed in 2020 should have noticeably
+lower effective confidence than one confirmed in 2025.
+
+---
+
+### Phase 8: Auto-Audit of Axioms
+
+**Priority:** LOW — the most innovative and riskiest module. Last to implement.
+**Effort:** Large — requires all previous phases.
+**Depends on:** All above.
+
+After each complete audit, run an additional cycle:
+"My meta-axioms assume knowledge in [domain] organizes by institutions,
+languages, schools, and subdisciplines. Is this correct for [domain]?
+Are there organizational dimensions I'm not considering?"
+
+If LLM identifies a missing dimension (confidence > 0.7):
+generate new expectation axis, re-run audit including it.
+
+The Antikythera live test already demonstrated this naturally:
+Claude spontaneously generated the "Babylonian transmission" axiom,
+the "predecessor" axiom, and the "access control" axiom.
+Phase 8 formalizes what the LLM already does intuitively.
+
+Limits: max 2 auto-audit cycles per session.
+Discovered dimensions saved as hypotheses in knowledge store,
+not as confirmed axioms.
+
+---
+
+## Implementation Priority
+
+The founder's sequencing is clear:
 
 ```
-epistemix/
-├── README.md
-├── pyproject.toml
-├── .gitignore
-├── src/
-│   └── epistemix/
-│       ├── __init__.py              # Package exports, version
-│       ├── models.py                # All data models (Finding, Postulate, Anomaly, Query, etc.)
-│       ├── meta_axioms.py           # Level 0 meta-axioms (fixed structural knowledge)
-│       ├── core.py                  # Main engine (~46KB) — postulates, queries, cycles, coverage
-│       ├── citation_graph.py        # Citation graph analysis (~11KB) — schools, islands
-│       ├── disciplines.py           # Disciplinary expectations (~12KB) — evidence→discipline rules
-│       ├── content_analysis.py      # Content analysis (~17KB) — absences, convergence, empty queries
-│       ├── multi_agent.py           # Dual-agent system (~24KB) — α/β agents + arbiter
-│       ├── connector.py             # API connector (~13KB) — MockConnector + ClaudeConnector
-│       └── run.py                   # CLI orchestrator (~12KB)
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py                  # Shared fixtures, mock data
-│   ├── test_models.py
-│   ├── test_core.py
-│   ├── test_citation_graph.py
-│   ├── test_disciplines.py
-│   ├── test_content_analysis.py
-│   ├── test_multi_agent.py
-│   ├── test_connector.py
-│   ├── test_integrated.py           # Full integration test (~17KB)
-│   └── test_amphipolis.py           # Amphipolis 4-cycle simulation (~21KB)
+Phase 1 (confidence) ──┬── Phase 7 (decay)     ← Week 1
+Phase 2 (negatives)  ──┘
+                        ├── Phase 4 (ar/zh)     ← Week 2-3
+                        ├── Phase 5 (memory)    ← Week 3-4
+Phase 3 (relations)  ────── Phase 6 (gen agent) ← Week 4-6
+                        └── Phase 8 (auto-audit)← After validation
 ```
 
-**Key design decision:** A separate `models.py` centralizes all data structures to prevent circular imports and ensure a clean DAG dependency graph.
+**Immediate (this session or next):** Phases 1 + 2 + 7
+**Short-term:** Phases 3 + 4
+**Medium-term:** Phase 5 (the moat)
+**After validation:** Phases 6 + 8
 
 ---
 
-## Implementation Phases (in order)
+## Defensibility Architecture
 
-### Phase 1: Foundation
-Files: `pyproject.toml`, `.gitignore`, `__init__.py`, `models.py`, `meta_axioms.py`, `tests/conftest.py`, `tests/test_models.py`
+The moat is built on three pillars:
 
-1. **pyproject.toml** — Python 3.10+, no mandatory deps, optional `anthropic` for live use, pytest for dev
-2. **models.py** — All data structures using `dataclasses` + `enum`:
-   - `Severity` (CRITICAL/HIGH/MEDIUM), `FindingType`, `PostulateStatus`, `AnomalyType`, `QueryLanguage`
-   - `Finding` — discovered entity (scholar, theory, institution, etc.) with dedup via `__hash__`/`__eq__`
-   - `Postulate` — dynamic assertion about what should exist, with status tracking
-   - `Anomaly` — gap between expectation and finding, with severity and suggested queries
-   - `Query` — search query with language, priority, execution status
-   - `CoverageScore` — always a lower bound (confirmed/total postulates + anomaly counts)
-   - `ResearchState` — complete audit state container (findings, postulates, anomalies, queries, coverage history)
-3. **meta_axioms.py** — 7 Level 0 meta-axioms (language, institution, theory, school, discipline, publication, temporal)
-4. **Tests** for models and fixtures
+1. **Axiom library** (grows with use) — accumulated domain axioms are proprietary.
+   After 100 audits on 50 domains, a competitor must rebuild from scratch.
 
-### Phase 2: Analysis Modules
-Files: `citation_graph.py`, `disciplines.py`, `content_analysis.py` + their tests
+2. **Academic publication** — the paper establishes intellectual priority.
+   Structure: (1) problem, (2) formal framework, (3) experimental results
+   (Amphipolis + Antikythera), (4) limits, (5) AGI implications.
+   Target: AAAI, NeurIPS workshop, or AI/epistemology journal.
 
-5. **citation_graph.py** — `CitationGraph` class:
-   - Directed adjacency list (no networkx)
-   - `detect_schools()` — mutual citation clusters via BFS connected components
-   - `check_single_school()` → CRITICAL anomaly if only one school
-   - `find_citation_islands()` — scholars cited by many but never directly searched
-   - `investigation_priority_ranking()` — priority = in_citations / (direct_searches + 1)
+3. **Domain verticals** — months of specialized work per domain:
+   - Medicine: Cochrane Reviews, PubMed/CNKI/LILACS, evidence levels
+   - Finance: corporate registries, due diligence structure, regulatory sources
+   - Intelligence: OSINT classification, linguistic asymmetries, disinfo patterns
+   - Law: jurisprudence by legal family, primary sources by jurisdiction
 
-6. **disciplines.py** — `DisciplineExpectations` class:
-   - `EVIDENCE_DISCIPLINE_MAP`: inscriptions→epigraphy, human_remains→osteology, mosaics→art_history, etc.
-   - `register_evidence()` → generates postulates for expected disciplines
-   - `detect_anomalies()` → flags when evidence found but no specialist
-   - Target: identify 3 Amphipolis gaps (epigraphy, osteology, art history)
-
-7. **content_analysis.py** — Three analyzers + facade:
-   - `StructuralAbsenceAnalyzer`: N entities found, M discussed → N-M gaps
-   - `ConvergenceAnalyzer`: uniformity score, excess convergence/divergence detection
-   - `EmptyQueryAnalyzer`: patterns in queries that returned nothing
-   - `ContentAnalysisEngine`: facade combining all three
-
-### Phase 3: Core Engine + Connector
-Files: `connector.py`, `core.py` + their tests
-
-8. **connector.py** — `BaseConnector` (ABC), `MockConnector`, `ClaudeConnector`:
-   - `MockConnector`: pattern-matched canned responses, call logging
-   - `ClaudeConnector`: Anthropic SDK with `web_search_20250305` tool, budget tracking, rate limiting, retry with backoff, structured JSON parsing
-
-9. **core.py** — `EpistemicEngine` (the largest module):
-   - **Postulate management**: `initialize_postulates()` from meta-axioms + (topic, country, discipline)
-   - **Query generation**: `generate_initial_queries()` multilingual, `generate_queries_from_anomalies()` targeted
-   - **Multilingual support**: language-country mapping table, template-based query translation with pre-built term lookup tables (Greek, French, German, Italian for archaeology domain)
-   - **Result ingestion**: `ingest_results()` → extract entities → deduplicate → link to queries
-   - **Postulate updating**: findings confirm postulates; new evidence types generate new postulates dynamically
-   - **Coverage calculation**: always framed as lower bound (confirmed/total, denominator grows)
-   - **Anomaly detection**: language gaps, theory gaps, discipline gaps, institution gaps
-   - **Cycle orchestration**: `run_cycle()` and `run_all_cycles()` with convergence check
-
-### Phase 4: Multi-Agent + Integration Tests
-Files: `multi_agent.py`, `test_integrated.py`, `test_amphipolis.py`
-
-10. **multi_agent.py** — Dual-agent epistemic audit:
-    - `AgentPerspective` — axiom weight configuration
-    - `EpistemicAgent` — generates weighted postulates, evaluates findings, detects anomalies from its perspective
-    - Agent α (institutional): weights MA-01/02/04/06 → institutions, languages, schools, publications
-    - Agent β (theoretical): weights MA-03/05/07 → theories, disciplines, temporal
-    - `Arbiter` — compares reports, finds agreement/disagreement, promotes discrepancies to known unknowns
-    - `MultiAgentSystem` — orchestrator, combined coverage = min(α, β)
-    - Target: α=71% 0 anomalies, β=67% 5 anomalies, combined=54%, blindness=21 points
-
-11. **test_integrated.py** — Full pipeline test with all modules using MockConnector
-12. **test_amphipolis.py** — 4-cycle simulation with carefully crafted mock data:
-    - Cycle 0: 1 scholar, 1 theory, ~38% coverage
-    - Cycle 1: 6 scholars, 3 theories, ~57%, Mavrogiannis flagged as gap
-    - Cycle 2: 8 scholars, 4 theories, ~69%, Mavrogiannis found
-    - Cycle 3: 11 scholars, 4 theories, ~75%
-    - Multi-agent: 18 anomalies (2 CRITICAL, 9 HIGH, 7 MEDIUM)
-
-### Phase 5: CLI + README
-Files: `run.py`, updated `README.md`
-
-13. **run.py** — CLI entry point:
-    - `--topic`, `--country`, `--discipline` (required)
-    - `--cycles` (default 4), `--live`/`--mock`, `--verbose`, `--output`, `--budget`, `--model`
-    - Progress display, anomaly summary, final report as JSON
-
-14. **README.md** — Project documentation with usage examples
+**Licensing:**
+- Core framework: MIT (attracts community, establishes authorship)
+- Knowledge store: proprietary, not distributed
+- Verticals: commercial license
+- Reports: watermarked for traceability
 
 ---
 
-## Dependency Graph (strict DAG, no cycles)
+## Risks
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| API cost explosion | Relation extraction + generative agents = 2-3x calls | Cache aggressively. Haiku for extraction. Budget cap. Batch calls. |
+| LLM hallucinations | Invented relations pollute the graph | Require evidence (textual quote). No evidence = confidence 0.1. |
+| Auto-audit loops | System never converges | Hard limit: 2 auto-audit cycles. Convergence threshold = stop. |
+| Knowledge store pollution | Wrong axioms persist, degrade future audits | Confidence scores. Periodic review. Domain-level reset. |
+| Over-engineering | Building v3 before validating v2 live | FIRST the live test of v2. ✅ Done — Antikythera test passed. |
+
+---
+
+## Dependency Graph (v3)
 
 ```
-meta_axioms.py ──┐
-                 │
-models.py ───────┤
-                 ├──► citation_graph.py ──┐
-                 ├──► disciplines.py ─────┤
-                 ├──► content_analysis.py ┤
-                 │                        │
-                 ├──► connector.py        │
-                 │       │                │
-                 │       ▼                ▼
-                 └──► core.py ──────► multi_agent.py
-                                          │
-                                          ▼
-                                       run.py
+models.py ───────────────────────────────────────────────┐
+   │                                                     │
+meta_axioms.py ──┐                                       │
+                 │                                       │
+   ├─► citation_graph.py ──┐   (v2, replaced by ↓ in v3)│
+   │                       │                             │
+   ├─► semantic_graph.py ──┤   (v3, Phase 3)             │
+   │                       │                             │
+   ├─► disciplines.py ─────┤                             │
+   │                       │                             │
+   ├─► content_analysis.py ┤                             │
+   │                       │                             │
+   ├─► connector.py        │                             │
+   │       │               │                             │
+   │       ▼               ▼                             │
+   └─► core.py ──────► multi_agent.py                    │
+           │               │                             │
+           ▼               ▼                             │
+       knowledge_store.py  (v3, Phase 5)                 │
+           │                                             │
+           ▼                                             │
+        run.py ◄─────────────────────────────────────────┘
 ```
 
----
-
-## Key Amphipolis Test Targets
-
-| Metric | Target |
-|--------|--------|
-| Cycle 0 coverage | ~38% |
-| Cycle 1 coverage | ~57% |
-| Cycle 2 coverage | ~69% |
-| Cycle 3 coverage | ~75% |
-| Multi-agent coverage | ~54% |
-| Blindness gap | ~21 points |
-| Total unique anomalies | 18 |
-| CRITICAL anomalies | 2 |
-| HIGH anomalies | 9 |
-| MEDIUM anomalies | 7 |
-
----
-
-## Commit Strategy
-
-One commit per phase, pushed to `claude/epistemix-planning-2bRZx`:
-1. "Add project scaffolding, data models, and meta-axioms"
-2. "Add analysis modules: citation graph, disciplines, content analysis"
-3. "Add core engine and API connector"
-4. "Add multi-agent system and integration tests"
-5. "Add CLI orchestrator and documentation"
+**Rule:** Never import upward. `knowledge_store.py` reads from `core.py`
+and `multi_agent.py` but does not feed back into them at import time.

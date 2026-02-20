@@ -32,8 +32,10 @@ from epistemix.models import (
     Expectation,
     Finding,
     GapType,
+    NegativePostulate,
     SearchQuery,
     Severity,
+    WeightedPostulate,
 )
 from epistemix.knowledge import (
     GEOGRAPHIC_LINGUISTIC,
@@ -42,6 +44,25 @@ from epistemix.knowledge import (
     TRANSLITERATIONS,
     classify_entity_name,
 )
+
+
+# ============================================================
+# DECAY RATES BY DOMAIN (Phase 7)
+# ============================================================
+
+DECAY_RATES: dict[str, float] = {
+    "archaeology": 0.02,
+    "history": 0.03,
+    "medicine": 0.08,
+    "finance": 0.15,
+    "virology": 0.10,
+    "law": 0.05,
+    "default": 0.02,
+}
+
+# Confidence calculation constants (Phase 1)
+_CONFIDENCE_BASE = {1: 0.2, 2: 0.4, 3: 0.6, 4: 0.7, 5: 0.8}
+_MAX_LANGUAGE_BONUS = 0.2
 
 
 # ============================================================
@@ -72,6 +93,12 @@ class DynamicPostulates:
 
         # Track evolution
         self.history: list[dict] = []
+
+        # v3: Weighted postulates (Phase 1)
+        self.weighted_postulates: dict[str, WeightedPostulate] = {}
+
+        # v3: Negative postulates (Phase 2)
+        self.negative_postulates: list[NegativePostulate] = []
 
     def ingest_finding(self, finding: Finding) -> list[str]:
         """Process a finding: extract entities, update postulates.
@@ -133,6 +160,9 @@ class DynamicPostulates:
                     self.entities[key].times_mentioned += 1
                     self.entities[key].languages_seen_in.add(finding.language)
 
+        # v3: Update weighted postulates (Phase 1)
+        self._update_weighted_postulates(finding, finding.cycle)
+
         return new_entities
 
     def _register_entity(
@@ -163,6 +193,72 @@ class DynamicPostulates:
         )
         return True
 
+    def _update_weighted_postulates(
+        self, finding: Finding, cycle: int,
+    ) -> None:
+        """Update weighted postulates from a finding (Phase 1).
+
+        For each entity/theory/institution in the finding, find or create
+        a WeightedPostulate and update its confidence score.
+        """
+        decay_rate = DECAY_RATES.get(
+            self.discipline.lower(), DECAY_RATES["default"]
+        )
+        subjects: list[tuple[str, str]] = []
+
+        if finding.author:
+            subjects.append((finding.author, "MA-02"))
+        if finding.institution:
+            subjects.append((finding.institution, "MA-02"))
+        if finding.theory_supported:
+            subjects.append((finding.theory_supported, "MA-03"))
+        for name in finding.entities_mentioned:
+            subjects.append((name, "MA-05"))
+
+        for subject, axiom_id in subjects:
+            key = subject.lower().strip()
+            if not key:
+                continue
+
+            if key not in self.weighted_postulates:
+                self.weighted_postulates[key] = WeightedPostulate(
+                    description=subject,
+                    meta_axiom_id=axiom_id,
+                    source_count=0,
+                    language_spread=0,
+                    confidence=0.0,
+                    last_confirmed_cycle=cycle,
+                    decay_rate=decay_rate,
+                )
+
+            wp = self.weighted_postulates[key]
+            wp.source_count += 1
+            wp.last_confirmed_cycle = cycle
+
+            # Count distinct languages across all findings for this subject
+            langs = set()
+            for entity in self.entities.values():
+                if entity.name.lower().strip() == key:
+                    langs = entity.languages_seen_in
+                    break
+            langs.add(finding.language)
+            wp.language_spread = len(langs)
+
+            # Confidence = base_from_sources × language_bonus
+            sc = wp.source_count
+            base = _CONFIDENCE_BASE.get(
+                min(sc, 5), 0.8 + 0.02 * min(sc - 5, 10)
+            )
+            lang_bonus = min(
+                _MAX_LANGUAGE_BONUS,
+                (wp.language_spread - 1) * 0.1,
+            )
+            wp.confidence = min(1.0, base + lang_bonus)
+
+    def register_negative_postulate(self, neg: NegativePostulate) -> None:
+        """Register a negative postulate (Phase 2)."""
+        self.negative_postulates.append(neg)
+
     def get_uninvestigated_scholars(self) -> list[Entity]:
         """Scholars mentioned but not yet investigated (no publication found)."""
         return [
@@ -182,12 +278,19 @@ class DynamicPostulates:
 
     def snapshot(self) -> dict[str, Any]:
         """Return current state as a dict."""
+        wps = list(self.weighted_postulates.values())
+        avg_conf = (
+            sum(wp.confidence for wp in wps) / len(wps) if wps else 0.0
+        )
         return {
             "scholars": len(self.scholars),
             "theories": len(self.theories),
             "institutions": len(self.institutions),
             "total_entities": len(self.entities),
             "languages": sorted(self.languages_covered),
+            "weighted_postulates": len(wps),
+            "avg_confidence": round(avg_conf, 3),
+            "negative_postulates": len(self.negative_postulates),
         }
 
     def describe(self) -> str:
@@ -210,6 +313,18 @@ class DynamicPostulates:
                 lines.append(
                     f"  - {e.name} (mentioned {e.times_mentioned}x)"
                 )
+        # v3: confidence distribution
+        if self.weighted_postulates:
+            wps = list(self.weighted_postulates.values())
+            avg = sum(wp.confidence for wp in wps) / len(wps)
+            by_action = {}
+            for wp in wps:
+                by_action[wp.action] = by_action.get(wp.action, 0) + 1
+            lines.append(f"Weighted postulates: {len(wps)} (avg confidence: {avg:.2f})")
+            for action, count in sorted(by_action.items()):
+                lines.append(f"  - {action}: {count}")
+        if self.negative_postulates:
+            lines.append(f"Negative postulates: {len(self.negative_postulates)}")
         return "\n".join(lines)
 
 
@@ -377,6 +492,79 @@ class MultilingualQueryGenerator:
                         priority=anomaly.severity,
                         target_gap=anomaly.gap_type,
                     ))
+
+        # v3 Phase 2: Add reformulated queries from negative postulates
+        for neg in self.postulates.negative_postulates:
+            if neg.reformulation:
+                key = (neg.reformulation.lower(), neg.language)
+                if key not in seen:
+                    seen.add(key)
+                    queries.append(SearchQuery(
+                        query=neg.reformulation,
+                        language=neg.language,
+                        rationale=(
+                            f"Reformulation (attempt {neg.attempts + 1}): "
+                            f"original '{neg.query_text[:30]}' returned nothing"
+                        ),
+                        priority=Severity.MEDIUM,
+                        target_gap=GapType.EMPTY_QUERY_PATTERN,
+                    ))
+
+        return queries
+
+    def generate_confidence_queries(self) -> list[SearchQuery]:
+        """Generate queries driven by postulate confidence (Phase 1).
+
+        Low-confidence postulates (< 0.3) get verification queries.
+        High-confidence postulates (> 0.8) with few sources get
+        deepening queries in underrepresented languages.
+        """
+        queries: list[SearchQuery] = []
+        seen: set[tuple[str, str]] = set()
+
+        for key, wp in self.postulates.weighted_postulates.items():
+            if wp.confidence < 0.3 and wp.source_count >= 1:
+                # VERIFY: try to confirm this postulate
+                q = (
+                    f'"{wp.description}" '
+                    f"{self.postulates.topic} research"
+                )
+                qkey = (q.lower(), "en")
+                if qkey not in seen:
+                    seen.add(qkey)
+                    queries.append(SearchQuery(
+                        query=q,
+                        language="en",
+                        rationale=(
+                            f"Verify low-confidence postulate "
+                            f"({wp.confidence:.0%}): {wp.description}"
+                        ),
+                        priority=Severity.MEDIUM,
+                        target_gap=GapType.VOICE,
+                    ))
+
+            elif wp.confidence > 0.8 and wp.language_spread < 2:
+                # DEEPEN: try other languages for well-known subjects
+                for lang in self._relevant_languages():
+                    if lang != "en":
+                        translated = self._transliterate(
+                            wp.description, lang
+                        )
+                        q = f"{translated} {self.postulates.topic}"
+                        qkey = (q.lower(), lang)
+                        if qkey not in seen:
+                            seen.add(qkey)
+                            queries.append(SearchQuery(
+                                query=q,
+                                language=lang,
+                                rationale=(
+                                    f"Deepen reliable postulate in {lang}: "
+                                    f"{wp.description}"
+                                ),
+                                priority=Severity.LOW,
+                                target_gap=GapType.LINGUISTIC,
+                            ))
+                            break  # one deepening query per postulate
 
         return queries
 
@@ -877,6 +1065,14 @@ class EpistemixEngine:
             self.all_anomalies
         )
 
+        # v3 Phase 1: confidence-driven queries
+        confidence_queries = self.query_gen.generate_confidence_queries()
+        self.pending_queries.extend(confidence_queries)
+
+        # v3 Phase 7: apply temporal decay to all weighted postulates
+        for wp in self.postulates.weighted_postulates.values():
+            wp.confidence = wp.effective_confidence(self.current_cycle)
+
         coverage = calculate_coverage(
             self.all_expectations, self.all_anomalies
         )
@@ -895,6 +1091,9 @@ class EpistemixEngine:
             coverage_score=round(coverage, 1),
             new_entities_discovered=[],
             queries_generated=len(self.pending_queries),
+            weighted_postulates_count=snap["weighted_postulates"],
+            avg_confidence=snap["avg_confidence"],
+            negative_postulates_count=snap["negative_postulates"],
         )
         self.cycle_history.append(snapshot)
         return snapshot
@@ -997,4 +1196,12 @@ class EpistemixEngine:
             "expectations": [e.to_dict() for e in self.all_expectations],
             "anomalies": [a.to_dict() for a in self.all_anomalies],
             "pending_queries": [q.to_dict() for q in self.pending_queries],
+            "weighted_postulates": [
+                wp.to_dict()
+                for wp in self.postulates.weighted_postulates.values()
+            ],
+            "negative_postulates": [
+                np.to_dict()
+                for np in self.postulates.negative_postulates
+            ],
         }

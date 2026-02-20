@@ -136,6 +136,91 @@ class TestSearchQuery:
         assert d["target_gap"] == "linguistic"
 
 
+class TestWeightedPostulate:
+    def test_default_confidence(self):
+        from epistemix.models import WeightedPostulate
+        wp = WeightedPostulate(description="Test postulate")
+        assert wp.confidence == 0.5
+        assert wp.action == "STANDARD"
+
+    def test_action_thresholds(self):
+        from epistemix.models import WeightedPostulate
+        wp = WeightedPostulate(description="Test", confidence=0.1)
+        assert wp.action == "VERIFY"
+        wp.confidence = 0.4
+        assert wp.action == "STANDARD"
+        wp.confidence = 0.75
+        assert wp.action == "RELIABLE"
+        wp.confidence = 0.95
+        assert wp.action == "CONSOLIDATED"
+
+    def test_effective_confidence_no_decay(self):
+        from epistemix.models import WeightedPostulate
+        wp = WeightedPostulate(
+            description="Test", confidence=0.8,
+            decay_rate=0.0, last_confirmed_cycle=1,
+        )
+        assert wp.effective_confidence(5) == 0.8
+
+    def test_effective_confidence_with_decay(self):
+        from epistemix.models import WeightedPostulate
+        wp = WeightedPostulate(
+            description="Test", confidence=0.8,
+            decay_rate=0.1, last_confirmed_cycle=0,
+        )
+        # 4 cycles later, 2 cycles per month = 2 months
+        eff = wp.effective_confidence(4, cycles_per_month=2.0)
+        expected = 0.8 * (0.9 ** 2)  # 0.648
+        assert abs(eff - expected) < 0.001
+
+    def test_effective_confidence_current_cycle(self):
+        from epistemix.models import WeightedPostulate
+        wp = WeightedPostulate(
+            description="Test", confidence=0.8,
+            decay_rate=0.1, last_confirmed_cycle=3,
+        )
+        assert wp.effective_confidence(3) == 0.8
+
+    def test_to_dict(self):
+        from epistemix.models import WeightedPostulate
+        wp = WeightedPostulate(
+            description="Test", meta_axiom_id="MA-01",
+            source_count=3, language_spread=2,
+            confidence=0.65, last_confirmed_cycle=2,
+            decay_rate=0.02,
+        )
+        d = wp.to_dict()
+        assert d["description"] == "Test"
+        assert d["meta_axiom_id"] == "MA-01"
+        assert d["action"] == "RELIABLE"
+        assert d["confidence"] == 0.65
+
+
+class TestNegativePostulate:
+    def test_default_values(self):
+        from epistemix.models import NegativePostulate
+        np_obj = NegativePostulate(query_text="test query", language="de")
+        assert np_obj.attempts == 1
+        assert np_obj.possible_reason == ""
+        assert np_obj.reformulation == ""
+
+    def test_to_dict(self):
+        from epistemix.models import NegativePostulate
+        np_obj = NegativePostulate(
+            query_text="Amphipolis Ausgrabung",
+            language="de",
+            expected_by="MA-01",
+            possible_reason="wrong_terminology",
+            reformulation="Amphipolis Grabung Archäologie",
+            detected_at_cycle=2,
+        )
+        d = np_obj.to_dict()
+        assert d["query_text"] == "Amphipolis Ausgrabung"
+        assert d["language"] == "de"
+        assert d["possible_reason"] == "wrong_terminology"
+        assert d["reformulation"] == "Amphipolis Grabung Archäologie"
+
+
 class TestCycleSnapshot:
     def test_to_dict(self):
         snap = CycleSnapshot(
@@ -148,3 +233,18 @@ class TestCycleSnapshot:
         assert d["cycle"] == 1
         assert d["percentage"] == 65.3
         assert d["confirmed"] == 7
+
+    def test_to_dict_v3_fields(self):
+        snap = CycleSnapshot(
+            cycle=2, n_postulate_scholars=5, n_postulate_theories=2,
+            n_postulate_institutions=3, n_expectations=10,
+            n_expectations_met=7, n_findings=15, n_anomalies=4,
+            coverage_score=65.3,
+            weighted_postulates_count=12,
+            avg_confidence=0.456,
+            negative_postulates_count=3,
+        )
+        d = snap.to_dict()
+        assert d["weighted_postulates"] == 12
+        assert d["avg_confidence"] == 0.456
+        assert d["negative_postulates"] == 3

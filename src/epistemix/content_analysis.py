@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from epistemix.models import Anomaly, Finding, GapType, Severity
+from epistemix.models import Anomaly, Finding, GapType, NegativePostulate, Severity
 
 
 # ============================================================
@@ -275,6 +275,61 @@ class EmptyQueryAnalyzer:
 
         return anomalies
 
+    # v3 Phase 2: walled-garden / access-barrier languages
+    _ACCESS_BARRIER_LANGUAGES = {"zh", "ar", "ja", "ko"}
+
+    def generate_negative_postulates(
+        self, cycle: int = 0,
+    ) -> list[NegativePostulate]:
+        """Create NegativePostulates from empty query patterns (Phase 2).
+
+        Groups empty queries by language and generates structured
+        hypotheses about why they returned nothing.
+        """
+        postulates: list[NegativePostulate] = []
+        stats = self.language_productivity()
+
+        for lang, counts in stats.items():
+            if counts["total"] < 2:
+                continue
+            empty_ratio = counts["empty"] / counts["total"]
+            if empty_ratio <= 0.5:
+                continue
+
+            empty_queries = [
+                r.query for r in self.results
+                if r.language == lang and r.empty
+            ]
+
+            # Determine possible reason
+            if lang in self._ACCESS_BARRIER_LANGUAGES:
+                reason = "access_barrier"
+                reformulation = (
+                    f"Try specialized databases for {lang} "
+                    f"(e.g., CNKI for zh, Shamaa for ar)"
+                )
+            elif counts["productive"] == 0:
+                reason = "wrong_terminology"
+                reformulation = (
+                    f"Rephrase using local terminology in {lang}"
+                )
+            else:
+                reason = "genuinely_absent"
+                reformulation = ""
+
+            for query in empty_queries:
+                postulates.append(NegativePostulate(
+                    query_text=query,
+                    language=lang,
+                    expected_by="MA-01",
+                    attempts=1,
+                    possible_reason=reason,
+                    reformulation=reformulation,
+                    detected_at_cycle=cycle,
+                ))
+
+        return postulates
+
 
 # ============================================================
 # FACADE
@@ -295,3 +350,9 @@ class ContentAnalysisEngine:
         anomalies.extend(self.convergence.generate_anomalies())
         anomalies.extend(self.empty_queries.generate_anomalies())
         return anomalies
+
+    def generate_negative_postulates(
+        self, cycle: int = 0,
+    ) -> list[NegativePostulate]:
+        """Collect negative postulates from EmptyQueryAnalyzer (Phase 2)."""
+        return self.empty_queries.generate_negative_postulates(cycle)

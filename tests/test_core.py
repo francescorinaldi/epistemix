@@ -2,6 +2,7 @@
 
 from epistemix.core import (
     AuditEngine,
+    DECAY_RATES,
     DynamicInferenceEngine,
     DynamicPostulates,
     EpistemixEngine,
@@ -13,7 +14,9 @@ from epistemix.models import (
     Expectation,
     Finding,
     GapType,
+    NegativePostulate,
     Severity,
+    WeightedPostulate,
 )
 
 
@@ -273,3 +276,269 @@ class TestEpistemixEngine:
         report = engine.report()
         assert "EPISTEMIX AUDIT REPORT" in report
         assert "Coverage" in report
+
+
+# ============================================================
+# v3 Phase 1: Weighted Postulates
+# ============================================================
+
+class TestWeightedPostulates:
+    def test_ingestion_creates_weighted_postulates(self):
+        """Ingesting a finding should create weighted postulates."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        f = Finding(
+            source="Paper", language="en",
+            author="Alice", institution="MIT",
+            theory_supported="Theory X",
+            entities_mentioned=["Bob"],
+            cycle=1,
+        )
+        post.ingest_finding(f)
+        assert len(post.weighted_postulates) > 0
+        # Alice, MIT, Theory X, Bob should all have entries
+        assert "alice" in post.weighted_postulates
+        assert "mit" in post.weighted_postulates
+        assert "theory x" in post.weighted_postulates
+
+    def test_confidence_increases_with_sources(self):
+        """More sources = higher confidence."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        f1 = Finding(
+            source="Paper 1", language="en",
+            author="Alice", cycle=1,
+        )
+        post.ingest_finding(f1)
+        conf_1 = post.weighted_postulates["alice"].confidence
+
+        f2 = Finding(
+            source="Paper 2", language="en",
+            entities_mentioned=["Alice"], cycle=1,
+        )
+        post.ingest_finding(f2)
+        conf_2 = post.weighted_postulates["alice"].confidence
+
+        assert conf_2 > conf_1
+
+    def test_language_spread_boosts_confidence(self):
+        """Same entity in multiple languages = higher confidence."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        f1 = Finding(
+            source="Paper EN", language="en",
+            author="Peristeri", cycle=1,
+        )
+        f2 = Finding(
+            source="Paper EL", language="el",
+            author="Peristeri", cycle=2,
+        )
+        post.ingest_finding(f1)
+        conf_en_only = post.weighted_postulates["peristeri"].confidence
+
+        post.ingest_finding(f2)
+        conf_multilingual = post.weighted_postulates["peristeri"].confidence
+
+        assert conf_multilingual > conf_en_only
+        assert post.weighted_postulates["peristeri"].language_spread == 2
+
+    def test_decay_rate_from_discipline(self):
+        """Decay rate should match the discipline."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        f = Finding(
+            source="Paper", language="en",
+            author="Alice", cycle=1,
+        )
+        post.ingest_finding(f)
+        wp = post.weighted_postulates["alice"]
+        assert wp.decay_rate == DECAY_RATES["archaeology"]
+
+    def test_snapshot_includes_weighted_postulates(self):
+        """Snapshot should include v3 fields."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        f = Finding(
+            source="Paper", language="en",
+            author="Alice", cycle=1,
+        )
+        post.ingest_finding(f)
+        snap = post.snapshot()
+        assert "weighted_postulates" in snap
+        assert snap["weighted_postulates"] > 0
+        assert "avg_confidence" in snap
+        assert snap["avg_confidence"] > 0
+
+    def test_describe_shows_confidence(self):
+        """Describe should mention weighted postulates."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        f = Finding(
+            source="Paper", language="en",
+            author="Alice", cycle=1,
+        )
+        post.ingest_finding(f)
+        desc = post.describe()
+        assert "Weighted postulates" in desc
+
+
+class TestConfidenceQueryGeneration:
+    def test_low_confidence_generates_verify_queries(self):
+        """Postulates with low confidence should get verification queries."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        # Manually set a low-confidence postulate
+        post.weighted_postulates["obscure scholar"] = WeightedPostulate(
+            description="Obscure Scholar",
+            confidence=0.15,
+            source_count=1,
+        )
+        gen = MultilingualQueryGenerator(post)
+        queries = gen.generate_confidence_queries()
+        verify_queries = [
+            q for q in queries
+            if "Verify" in q.rationale or "verify" in q.rationale.lower()
+        ]
+        assert len(verify_queries) >= 1
+
+    def test_high_confidence_mono_generates_deepen_queries(self):
+        """High-confidence postulates with one language get deepening queries."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        post.weighted_postulates["well known"] = WeightedPostulate(
+            description="Well Known",
+            confidence=0.85,
+            source_count=5,
+            language_spread=1,
+        )
+        gen = MultilingualQueryGenerator(post)
+        queries = gen.generate_confidence_queries()
+        deepen_queries = [
+            q for q in queries
+            if "Deepen" in q.rationale or "deepen" in q.rationale.lower()
+        ]
+        assert len(deepen_queries) >= 1
+
+    def test_no_queries_for_standard_confidence(self):
+        """Standard-confidence postulates don't generate extra queries."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        post.weighted_postulates["normal"] = WeightedPostulate(
+            description="Normal",
+            confidence=0.5,
+            source_count=2,
+            language_spread=2,
+        )
+        gen = MultilingualQueryGenerator(post)
+        queries = gen.generate_confidence_queries()
+        assert len(queries) == 0
+
+
+# ============================================================
+# v3 Phase 2: Negative Postulates
+# ============================================================
+
+class TestNegativePostulates:
+    def test_register_negative_postulate(self):
+        """DynamicPostulates should accept negative postulates."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        neg = NegativePostulate(
+            query_text="test query",
+            language="de",
+            expected_by="MA-01",
+            possible_reason="wrong_terminology",
+        )
+        post.register_negative_postulate(neg)
+        assert len(post.negative_postulates) == 1
+        assert post.negative_postulates[0].language == "de"
+
+    def test_negative_postulates_in_snapshot(self):
+        """Snapshot should count negative postulates."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        neg = NegativePostulate(query_text="q", language="de")
+        post.register_negative_postulate(neg)
+        snap = post.snapshot()
+        assert snap["negative_postulates"] == 1
+
+    def test_negative_postulate_generates_reformulation_query(self):
+        """Negative postulates with reformulations generate gap-filling queries."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        neg = NegativePostulate(
+            query_text="old query",
+            language="de",
+            reformulation="better query in German",
+        )
+        post.register_negative_postulate(neg)
+
+        gen = MultilingualQueryGenerator(post)
+        queries = gen.generate_gap_filling_queries([])
+        reformulated = [
+            q for q in queries if "Reformulation" in q.rationale
+        ]
+        assert len(reformulated) >= 1
+        assert reformulated[0].query == "better query in German"
+        assert reformulated[0].language == "de"
+
+
+# ============================================================
+# v3 Phase 7: Temporal Decay
+# ============================================================
+
+class TestTemporalDecay:
+    def test_decay_applied_in_run_cycle(self, cycle_0_findings):
+        """run_cycle should apply temporal decay to weighted postulates."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings(cycle_0_findings)
+
+        # First cycle: postulates are created
+        snap1 = engine.run_cycle()
+        assert snap1.weighted_postulates_count > 0
+
+        # Run 3 more cycles without new findings → confidence decays
+        for _ in range(3):
+            engine.run_cycle()
+
+        final_snap = engine.cycle_history[-1]
+        # Average confidence should decrease (decay without confirmation)
+        assert final_snap.avg_confidence <= snap1.avg_confidence
+
+    def test_confirmation_resets_decay(self):
+        """Re-confirming a postulate should reset its last_confirmed_cycle."""
+        post = DynamicPostulates("Greece", "test", "archaeology")
+        f1 = Finding(
+            source="Paper 1", language="en",
+            author="Alice", cycle=1,
+        )
+        post.ingest_finding(f1)
+        wp = post.weighted_postulates["alice"]
+        assert wp.last_confirmed_cycle == 1
+
+        f2 = Finding(
+            source="Paper 2", language="el",
+            entities_mentioned=["Alice"], cycle=5,
+        )
+        post.ingest_finding(f2)
+        assert wp.last_confirmed_cycle == 5
+
+
+# ============================================================
+# v3: Engine serialization includes v3 data
+# ============================================================
+
+class TestEngineV3Serialization:
+    def test_to_dict_includes_weighted_postulates(self, cycle_0_findings):
+        """to_dict should include weighted_postulates and negative_postulates."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings(cycle_0_findings)
+        engine.run_cycle()
+        d = engine.to_dict()
+        assert "weighted_postulates" in d
+        assert isinstance(d["weighted_postulates"], list)
+        assert len(d["weighted_postulates"]) > 0
+        assert "negative_postulates" in d
+        assert isinstance(d["negative_postulates"], list)
+
+    def test_cycle_snapshot_has_v3_fields(self, cycle_0_findings):
+        """CycleSnapshot should include weighted postulate metrics."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings(cycle_0_findings)
+        snap = engine.run_cycle()
+        assert snap.weighted_postulates_count > 0
+        assert snap.avg_confidence > 0
+        d = snap.to_dict()
+        assert "weighted_postulates" in d
+        assert "avg_confidence" in d

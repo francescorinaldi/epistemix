@@ -114,6 +114,57 @@ class TestFullPipeline:
         report = engine.report()
         assert "Evolution" in report  # Multi-cycle shows evolution
 
+    def test_v3_weighted_postulates_across_cycles(
+        self, cycle_0_findings, cycle_1_findings,
+        cycle_2_findings, cycle_3_findings,
+    ):
+        """v3: Weighted postulates accumulate and confidence grows."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+
+        all_cycles = [
+            cycle_0_findings, cycle_1_findings,
+            cycle_2_findings, cycle_3_findings,
+        ]
+        for cycle_findings in all_cycles:
+            engine.ingest_findings(cycle_findings)
+            engine.run_cycle()
+
+        # Should have weighted postulates created from all findings
+        wps = engine.postulates.weighted_postulates
+        assert len(wps) > 0
+
+        # Peristeri appears in many findings → high confidence
+        peristeri_key = "katerina peristeri"
+        assert peristeri_key in wps
+        assert wps[peristeri_key].confidence > 0.3
+        assert wps[peristeri_key].source_count >= 2
+
+        # to_dict should include v3 data
+        d = engine.to_dict()
+        assert len(d["weighted_postulates"]) > 0
+        assert any(
+            wp["description"] == "Katerina Peristeri"
+            for wp in d["weighted_postulates"]
+        )
+
+    def test_v3_cycle_snapshots_have_confidence(
+        self, cycle_0_findings, cycle_1_findings,
+    ):
+        """v3: CycleSnapshot includes weighted postulate metrics."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+
+        engine.ingest_findings(cycle_0_findings)
+        snap1 = engine.run_cycle()
+        assert snap1.weighted_postulates_count > 0
+        assert snap1.avg_confidence > 0
+
+        engine.ingest_findings(cycle_1_findings)
+        snap2 = engine.run_cycle()
+        # More findings → more postulates
+        assert snap2.weighted_postulates_count >= snap1.weighted_postulates_count
+
     def test_with_mock_connector(self):
         """Test using MockConnector for query execution."""
         connector = MockConnector()
