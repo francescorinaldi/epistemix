@@ -49,12 +49,12 @@ export default function CitationGraph({ findings }: Props) {
       if (nodes.length === 0) return;
 
       const colorScale: Record<string, string> = {
-        scholar: "#6366f1",
-        theory: "#f59e0b",
-        institution: "#10b981",
-        evidence: "#f43f5e",
-        publication: "#8b5cf6",
-        method: "#06b6d4",
+        scholar: "var(--chart-1)",
+        theory: "var(--chart-2)",
+        institution: "var(--chart-3)",
+        evidence: "var(--chart-5)",
+        publication: "var(--chart-4)",
+        method: "var(--chart-6)",
       };
 
       const simulation = d3
@@ -69,7 +69,7 @@ export default function CitationGraph({ findings }: Props) {
         .selectAll("line")
         .data(links)
         .join("line")
-        .attr("stroke", "#334155")
+        .attr("stroke", "rgba(255,255,255,0.06)")
         .attr("stroke-width", 1);
 
       const node = svg
@@ -78,8 +78,8 @@ export default function CitationGraph({ findings }: Props) {
         .data(nodes)
         .join("circle")
         .attr("r", (d: any) => Math.max(5, Math.min(15, 5 + d.citations * 2)))
-        .attr("fill", (d: any) => colorScale[d.type] || "#94a3b8")
-        .attr("stroke", "#0f172a")
+        .attr("fill", (d: any) => colorScale[d.type] || "var(--text-tertiary)")
+        .attr("stroke", "var(--bg-card)")
         .attr("stroke-width", 1.5);
 
       const label = svg
@@ -88,8 +88,8 @@ export default function CitationGraph({ findings }: Props) {
         .data(nodes)
         .join("text")
         .text((d: any) => d.id.length > 15 ? d.id.slice(0, 15) + "..." : d.id)
-        .attr("font-size", 9)
-        .attr("fill", "#94a3b8")
+        .attr("font-size", 8)
+        .attr("fill", "var(--text-tertiary)")
         .attr("dx", 12)
         .attr("dy", 3);
 
@@ -119,19 +119,21 @@ export default function CitationGraph({ findings }: Props) {
 
       <style jsx>{`
         .graph-container {
-          background: #0f172a;
-          border: 1px solid #1e293b;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: 1.5rem;
           overflow: hidden;
         }
         h3 {
-          color: #e2e8f0;
-          font-size: 1rem;
-          margin: 0 0 0.5rem 0;
+          font-family: var(--font-display);
+          font-size: 1.125rem;
+          color: var(--text-heading);
+          margin: 0 0 1rem 0;
+          font-weight: 400;
         }
         .empty {
-          color: #64748b;
+          color: var(--text-ghost);
           text-align: center;
           padding: 2rem;
         }

@@ -42,5 +42,8 @@ web/.vercel
 # Claude Code
 .claude/
 
+# Git worktrees
+.worktrees/
+
 # Build artifacts
 web/tsconfig.tsbuildinfo

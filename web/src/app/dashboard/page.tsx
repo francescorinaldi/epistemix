@@ -5,14 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase";
-import type { Audit } from "@/lib/types";
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: "#f59e0b",
-  running: "#6366f1",
-  complete: "#10b981",
-  failed: "#f87171",
-};
+import type { Audit, CoveragePoint } from "@/lib/types";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -41,13 +34,34 @@ export default function DashboardPage() {
   }, [user, authLoading, router]);
 
   if (authLoading || loading) {
-    return <div className="loading">Loading...</div>;
+    return (
+      <div className="loading-container">
+        <span className="loading-text">Loading</span>
+        <style jsx>{`
+          .loading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+          }
+          .loading-text {
+            font-family: var(--font-mono);
+            font-size: 0.8125rem;
+            color: var(--text-tertiary);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+          }
+        `}</style>
+      </div>
+    );
   }
 
   return (
     <main>
       <nav>
-        <Link href="/" className="logo">Epistemix</Link>
+        <Link href="/" className="logo">
+          Epistemix
+        </Link>
         <div className="nav-right">
           <span className="plan-badge">{profile?.plan ?? "free"}</span>
           <span className="usage">
@@ -65,7 +79,12 @@ export default function DashboardPage() {
 
       {audits.length === 0 ? (
         <div className="empty">
-          <p>No audits yet. Start your first epistemic audit.</p>
+          <p className="empty-prompt">
+            No audits yet.
+          </p>
+          <p className="empty-cta">
+            Start your first epistemic audit to map the unknown.
+          </p>
           <Link href="/audit/new" className="new-btn">
             Start Audit
           </Link>
@@ -73,10 +92,14 @@ export default function DashboardPage() {
       ) : (
         <div className="grid">
           {audits.map((audit) => {
+            const coverageHistory = audit.coverage_history as CoveragePoint[] | null;
             const lastCoverage =
-              audit.coverage_history.length > 0
-                ? audit.coverage_history[audit.coverage_history.length - 1]
+              Array.isArray(coverageHistory) && coverageHistory.length > 0
+                ? coverageHistory[coverageHistory.length - 1]
                 : null;
+            const findings = Array.isArray(audit.findings) ? audit.findings : [];
+            const anomalies = Array.isArray(audit.anomalies) ? audit.anomalies : [];
+
             return (
               <Link
                 key={audit.id}
@@ -84,10 +107,7 @@ export default function DashboardPage() {
                 className="card"
               >
                 <div className="card-header">
-                  <span
-                    className="status"
-                    style={{ color: STATUS_COLORS[audit.status] }}
-                  >
+                  <span className={`status status-${audit.status}`}>
                     {audit.status}
                   </span>
                   <span className="date">
@@ -107,13 +127,13 @@ export default function DashboardPage() {
                   </div>
                   <div className="stat">
                     <span className="stat-val">
-                      {audit.findings?.length ?? 0}
+                      {findings.length}
                     </span>
                     <span className="stat-lbl">Findings</span>
                   </div>
                   <div className="stat">
                     <span className="stat-val">
-                      {audit.anomalies?.length ?? 0}
+                      {anomalies.length}
                     </span>
                     <span className="stat-lbl">Anomalies</span>
                   </div>
@@ -126,20 +146,35 @@ export default function DashboardPage() {
 
       <style jsx>{`
         main {
-          max-width: 1120px;
+          max-width: 1200px;
           margin: 0 auto;
-          padding: 0 1.5rem 4rem;
+          padding: 0 2rem 4rem;
+          position: relative;
+          z-index: 1;
         }
+
+        /* ---- Nav ---- */
         nav {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 1.5rem 0;
+          padding: 1.75rem 0;
+          border-bottom: 1px solid var(--border-subtle);
+          margin-bottom: 0.5rem;
         }
         .logo {
-          font-size: 1.25rem;
-          font-weight: 800;
-          color: #6366f1;
+          font-family: var(--font-body);
+          font-size: 0.8125rem;
+          font-weight: 600;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--text-secondary);
+          text-decoration: none;
+          transition: color 0.2s;
+        }
+        .logo:hover {
+          color: var(--text-heading);
+          text-decoration: none;
         }
         .nav-right {
           display: flex;
@@ -147,113 +182,184 @@ export default function DashboardPage() {
           gap: 1rem;
         }
         .plan-badge {
+          font-family: var(--font-mono);
           font-size: 0.6875rem;
           text-transform: uppercase;
-          font-weight: 700;
-          padding: 0.125rem 0.5rem;
+          letter-spacing: 0.06em;
+          font-weight: 500;
+          padding: 0.1875rem 0.625rem;
           border-radius: 999px;
-          background: rgba(99, 102, 241, 0.15);
-          color: #a5b4fc;
+          background: var(--accent-bg);
+          border: 1px solid var(--accent-border);
+          color: var(--accent-dim);
         }
         .usage {
-          color: #64748b;
-          font-size: 0.8125rem;
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+          color: var(--text-tertiary);
         }
+
+        /* ---- Header ---- */
         .header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin: 2rem 0 1.5rem;
+          margin: 2.5rem 0 1.75rem;
         }
         h1 {
-          font-size: 1.75rem;
-          font-weight: 700;
+          font-family: var(--font-display);
+          font-size: 2rem;
+          font-weight: 400;
+          color: var(--text-heading);
         }
         .new-btn {
+          display: inline-flex;
+          align-items: center;
           padding: 0.625rem 1.25rem;
-          background: #6366f1;
-          color: white;
-          border-radius: 0.5rem;
+          background: var(--accent);
+          color: #0b0e15;
+          border-radius: var(--radius-md);
+          font-family: var(--font-body);
           font-weight: 600;
           font-size: 0.875rem;
-          transition: background 0.2s;
+          text-decoration: none;
+          transition: filter 0.2s, transform 0.2s;
         }
         .new-btn:hover {
-          background: #4f46e5;
+          filter: brightness(1.1);
+          transform: translateY(-1px);
           text-decoration: none;
+          color: #0b0e15;
         }
+
+        /* ---- Empty state ---- */
         .empty {
           text-align: center;
-          padding: 4rem 0;
-          color: #64748b;
+          padding: 5rem 0;
+          color: var(--text-tertiary);
         }
-        .empty p {
-          margin-bottom: 1.5rem;
+        .empty-prompt {
+          font-family: var(--font-body);
+          font-size: 0.9375rem;
+          color: var(--text-tertiary);
+          margin-bottom: 0.5rem;
         }
+        .empty-cta {
+          font-family: var(--font-display);
+          font-style: italic;
+          font-size: 1.125rem;
+          color: var(--text-secondary);
+          margin-bottom: 2rem;
+        }
+
+        /* ---- Grid ---- */
         .grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
           gap: 1rem;
         }
+
+        /* ---- Card ---- */
         .card {
-          background: #0f172a;
-          border: 1px solid #1e293b;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
-          transition: border-color 0.2s;
-          color: inherit;
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: 1.5rem;
           display: block;
+          color: inherit;
+          text-decoration: none;
+          transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
         }
         .card:hover {
-          border-color: #6366f1;
+          border-color: var(--accent-border);
+          box-shadow: var(--shadow-card);
+          transform: translateY(-2px);
           text-decoration: none;
+          color: inherit;
         }
+
         .card-header {
           display: flex;
           justify-content: space-between;
+          align-items: center;
           margin-bottom: 0.75rem;
         }
+
+        /* ---- Status badges ---- */
         .status {
-          font-size: 0.75rem;
-          font-weight: 700;
+          font-family: var(--font-mono);
+          font-size: 0.6875rem;
           text-transform: uppercase;
+          letter-spacing: 0.06em;
+          font-weight: 500;
+          padding: 0.125rem 0.625rem;
+          border-radius: 999px;
         }
-        .date {
-          font-size: 0.75rem;
-          color: #64748b;
+        .status-pending {
+          background: var(--warning-bg);
+          border: 1px solid var(--warning-border);
+          color: var(--warning);
         }
+        .status-running {
+          background: var(--info-bg);
+          border: 1px solid var(--info-border);
+          color: var(--info);
+        }
+        .status-complete {
+          background: var(--success-bg);
+          border: 1px solid var(--success-border);
+          color: var(--success);
+        }
+        .status-failed {
+          background: var(--danger-bg);
+          border: 1px solid var(--danger-border);
+          color: var(--danger);
+        }
+
+        /* ---- Card content ---- */
         .topic {
-          font-size: 1.0625rem;
-          font-weight: 600;
-          color: #f1f5f9;
+          font-family: var(--font-display);
+          font-size: 1.125rem;
+          font-weight: 400;
+          color: var(--text-heading);
           margin-bottom: 0.25rem;
+          line-height: 1.3;
         }
         .meta {
           font-size: 0.8125rem;
-          color: #64748b;
-          margin-bottom: 1rem;
+          color: var(--text-tertiary);
         }
+
         .stats-row {
           display: flex;
           gap: 1.5rem;
+          margin-top: 1.25rem;
+          padding-top: 1rem;
+          border-top: 1px solid var(--border-subtle);
         }
         .stat {
           display: flex;
           flex-direction: column;
+          gap: 0.125rem;
         }
         .stat-val {
+          font-family: var(--font-mono);
           font-size: 1.125rem;
           font-weight: 700;
-          color: #e2e8f0;
+          color: var(--text-heading);
         }
         .stat-lbl {
-          font-size: 0.6875rem;
-          color: #64748b;
+          font-family: var(--font-mono);
+          font-size: 0.625rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--text-tertiary);
         }
-        .loading {
-          text-align: center;
-          padding: 4rem;
-          color: #64748b;
+
+        .date {
+          font-family: var(--font-mono);
+          font-size: 0.6875rem;
+          color: var(--text-ghost);
         }
       `}</style>
     </main>

@@ -27,40 +27,46 @@ export default function CoverageChart({ history, multiAgentCoverage }: Props) {
       <h3>Coverage Over Cycles</h3>
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={history} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
           <XAxis
             dataKey="cycle"
-            stroke="#94a3b8"
-            label={{ value: "Cycle", position: "insideBottom", offset: -5, fill: "#94a3b8" }}
+            stroke="var(--text-ghost)"
+            label={{ value: "Cycle", position: "insideBottom", offset: -5, fill: "var(--text-ghost)" }}
           />
           <YAxis
             domain={[0, 100]}
-            stroke="#94a3b8"
-            label={{ value: "Coverage %", angle: -90, position: "insideLeft", fill: "#94a3b8" }}
+            stroke="var(--text-ghost)"
+            label={{ value: "Coverage %", angle: -90, position: "insideLeft", fill: "var(--text-ghost)" }}
           />
           <Tooltip
-            contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: "0.5rem" }}
-            labelStyle={{ color: "#94a3b8" }}
-            itemStyle={{ color: "#6366f1" }}
+            contentStyle={{
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-default)',
+              borderRadius: '8px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+            }}
+            labelStyle={{ color: 'var(--text-tertiary)' }}
+            itemStyle={{ color: 'var(--chart-1)' }}
             formatter={(value: number) => [`${value}%`, "Coverage"]}
           />
           <Line
             type="monotone"
             dataKey="percentage"
-            stroke="#6366f1"
-            strokeWidth={2.5}
-            dot={{ fill: "#6366f1", r: 4 }}
-            activeDot={{ r: 6 }}
+            stroke="var(--chart-1)"
+            strokeWidth={2}
+            dot={{ fill: "var(--chart-1)", r: 3 }}
+            activeDot={{ r: 5 }}
           />
           {multiAgentCoverage !== undefined && (
             <ReferenceLine
               y={multiAgentCoverage}
-              stroke="#f97316"
+              stroke="var(--accent)"
               strokeDasharray="5 5"
               label={{
                 value: `Multi-agent: ${multiAgentCoverage}%`,
-                fill: "#f97316",
-                fontSize: 12,
+                fill: "var(--accent)",
+                fontSize: 11,
                 position: "right",
               }}
             />
@@ -70,18 +76,20 @@ export default function CoverageChart({ history, multiAgentCoverage }: Props) {
 
       <style jsx>{`
         .chart-container {
-          background: #0f172a;
-          border: 1px solid #1e293b;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: 1.5rem;
         }
         h3 {
-          color: #e2e8f0;
-          font-size: 1rem;
-          margin: 0 0 0.75rem 0;
+          font-family: var(--font-display);
+          font-size: 1.125rem;
+          color: var(--text-heading);
+          margin: 0 0 1rem 0;
+          font-weight: 400;
         }
         .empty {
-          color: #64748b;
+          color: var(--text-ghost);
           text-align: center;
           padding: 2rem;
         }

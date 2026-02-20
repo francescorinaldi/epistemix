@@ -34,13 +34,13 @@ export default function AuditForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const plan = profile?.plan ?? "free";
+  const plan = (profile?.plan ?? "free") as "free" | "pro" | "enterprise";
   const maxCycles = maxCyclesForPlan(plan);
   const canStart = profile
     ? canStartAudit(plan, profile.audits_this_month)
     : false;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!topic.trim() || !country.trim()) return;
 
@@ -150,7 +150,7 @@ export default function AuditForm() {
           margin: 0 auto;
           display: flex;
           flex-direction: column;
-          gap: 1.25rem;
+          gap: 1.5rem;
         }
         .form-group {
           display: flex;
@@ -158,59 +158,68 @@ export default function AuditForm() {
           gap: 0.375rem;
         }
         label {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: #e2e8f0;
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--text-secondary);
         }
         input[type="text"],
         select {
-          padding: 0.625rem 0.75rem;
-          border: 1px solid #334155;
-          border-radius: 0.5rem;
-          background: #1e293b;
-          color: #f1f5f9;
+          padding: 0.75rem 0.875rem;
+          background: var(--bg-card);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-sm);
+          color: var(--text-heading);
+          font-family: var(--font-body);
           font-size: 0.9375rem;
         }
         input[type="text"]:focus,
         select:focus {
           outline: none;
-          border-color: #6366f1;
-          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+          border-color: var(--accent);
+          box-shadow: 0 0 0 2px var(--accent-bg);
         }
         input[type="range"] {
           flex: 1;
+          accent-color: var(--accent);
         }
         .cycle-count {
-          font-weight: 700;
-          color: #6366f1;
+          font-family: var(--font-mono);
           font-size: 1.125rem;
+          font-weight: 700;
+          color: var(--accent);
         }
         button {
-          padding: 0.75rem;
+          padding: 0.875rem;
           border: none;
-          border-radius: 0.5rem;
-          background: #6366f1;
-          color: white;
+          border-radius: var(--radius-md);
+          background: var(--accent);
+          color: #0b0e15;
           font-weight: 600;
-          font-size: 1rem;
+          font-family: var(--font-body);
+          font-size: 0.9375rem;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: filter 0.2s, transform 0.2s;
         }
         button:hover:not(:disabled) {
-          background: #4f46e5;
+          filter: brightness(1.1);
+          transform: translateY(-1px);
         }
         button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
         .error {
-          color: #f87171;
-          font-size: 0.875rem;
+          color: var(--danger);
+          font-size: 0.8125rem;
         }
         .upgrade-hint {
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+          color: var(--text-tertiary);
           text-align: center;
-          color: #94a3b8;
-          font-size: 0.8125rem;
         }
       `}</style>
     </form>

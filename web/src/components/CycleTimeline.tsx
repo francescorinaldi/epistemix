@@ -81,15 +81,17 @@ export default function CycleTimeline({
 
       <style jsx>{`
         .timeline {
-          background: #0f172a;
-          border: 1px solid #1e293b;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: 1.5rem;
         }
         h3 {
-          color: #e2e8f0;
-          font-size: 1rem;
+          font-family: var(--font-display);
+          font-size: 1.125rem;
+          color: var(--text-heading);
           margin: 0 0 1rem 0;
+          font-weight: 400;
         }
         .steps {
           display: flex;
@@ -111,8 +113,8 @@ export default function CycleTimeline({
           left: -1.25rem;
           top: 0;
           bottom: 0;
-          width: 2px;
-          background: #334155;
+          width: 1px;
+          background: var(--border-subtle);
         }
         .step:first-child::before {
           top: 50%;
@@ -121,8 +123,8 @@ export default function CycleTimeline({
           bottom: 50%;
         }
         .dot {
-          width: 24px;
-          height: 24px;
+          width: 22px;
+          height: 22px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -133,22 +135,24 @@ export default function CycleTimeline({
           z-index: 1;
         }
         .complete .dot {
-          background: #6366f1;
-          color: white;
+          background: var(--accent);
+          color: #0b0e15;
         }
         .current .dot {
-          background: #1e293b;
-          border: 2px solid #6366f1;
+          background: var(--bg-elevated);
+          border: 2px solid var(--accent);
         }
         .pending .dot {
-          background: #1e293b;
-          border: 2px solid #334155;
+          background: var(--bg-elevated);
+          border: 1px solid var(--border-default);
+          width: 22px;
+          height: 22px;
         }
         .pulse {
           width: 8px;
           height: 8px;
           border-radius: 50%;
-          background: #6366f1;
+          background: var(--accent);
           animation: pulse 1.5s ease-in-out infinite;
         }
         @keyframes pulse {
@@ -162,21 +166,24 @@ export default function CycleTimeline({
           margin-left: -0.75rem;
         }
         .label {
-          color: #e2e8f0;
-          font-size: 0.875rem;
+          font-family: var(--font-body);
+          font-size: 0.8125rem;
           font-weight: 500;
+          color: var(--text-primary);
         }
         .pending .label {
-          color: #64748b;
+          color: var(--text-ghost);
         }
         .coverage {
-          color: #6366f1;
+          font-family: var(--font-mono);
+          font-size: 0.8125rem;
           font-weight: 700;
-          font-size: 0.875rem;
+          color: var(--accent);
         }
         .running {
-          color: #f59e0b;
-          font-size: 0.75rem;
+          font-family: var(--font-mono);
+          font-size: 0.6875rem;
+          color: var(--warning);
           animation: blink 1s ease-in-out infinite;
         }
         @keyframes blink {
