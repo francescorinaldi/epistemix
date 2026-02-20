@@ -86,54 +86,55 @@ export default function BlindnessGauge({ result }: Props) {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius-lg);
-          padding: 1.5rem;
+          padding: 2rem;
         }
         h3 {
           font-family: var(--font-display);
-          font-size: 1.125rem;
+          font-size: 1rem;
           color: var(--text-heading);
-          margin: 0 0 1rem 0;
+          margin: 0 0 1.25rem 0;
           font-weight: 400;
         }
         h4 {
           font-family: var(--font-display);
           font-size: 1rem;
           color: var(--text-heading);
-          margin: 0 0 0.5rem 0;
+          margin: 0 0 0.75rem 0;
           font-weight: 400;
         }
         .meters {
           display: flex;
           flex-direction: column;
-          gap: 0.75rem;
-          margin-bottom: 1.25rem;
+          gap: 0.875rem;
+          margin-bottom: 1.5rem;
         }
         .meter-label {
           display: flex;
           justify-content: space-between;
-          font-family: var(--font-mono);
+          font-family: var(--font-body);
           font-size: 0.75rem;
           color: var(--text-tertiary);
-          margin-bottom: 0.25rem;
+          margin-bottom: 0.375rem;
         }
         .value {
           font-family: var(--font-mono);
-          font-weight: 700;
-          color: var(--text-heading);
+          font-weight: 500;
+          font-size: 0.75rem;
+          color: var(--text-secondary);
         }
         .combined-value {
-          color: var(--accent);
+          color: var(--accent-dim);
         }
         .bar {
-          height: 5px;
-          background: var(--bg-hover);
-          border-radius: 3px;
+          height: 2px;
+          background: rgba(255,255,255,0.04);
+          border-radius: 1px;
           overflow: hidden;
         }
         .fill {
           height: 100%;
-          border-radius: 3px;
-          transition: width 0.5s ease;
+          border-radius: 1px;
+          transition: width 0.6s ease;
         }
         .fill.alpha {
           background: var(--chart-1);
@@ -147,56 +148,62 @@ export default function BlindnessGauge({ result }: Props) {
         .stats {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 0.75rem;
-          margin-bottom: 1rem;
+          gap: 0;
+          margin-bottom: 1.25rem;
         }
         .stat {
           text-align: center;
-          padding: 0.75rem;
-          background: var(--bg-elevated);
-          border-radius: var(--radius-md);
+          padding: 0.75rem 0.5rem;
+          border-bottom: 1px solid var(--border-subtle);
         }
-        .stat.blindness {
-          border: 1px solid var(--accent-border);
+        .stat:not(:last-child) {
+          border-right: 1px solid var(--border-subtle);
+        }
+        .stat.blindness .stat-value {
+          color: var(--accent);
         }
         .stat-value {
           font-family: var(--font-mono);
-          font-size: 1.25rem;
-          font-weight: 700;
+          font-size: 1.125rem;
+          font-weight: 500;
           color: var(--text-heading);
-        }
-        .blindness .stat-value {
-          color: var(--accent);
         }
         .stat-label {
           font-family: var(--font-mono);
           font-size: 0.5625rem;
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.06em;
           color: var(--text-tertiary);
-          margin-top: 0.125rem;
+          margin-top: 0.25rem;
         }
         .unknowns {
           border-top: 1px solid var(--border-subtle);
-          padding-top: 1rem;
-          margin-top: 0.5rem;
+          padding-top: 1.25rem;
+          margin-top: 0.25rem;
         }
         .unknown {
           display: flex;
-          gap: 0.5rem;
-          padding: 0.375rem 0;
+          align-items: baseline;
+          gap: 0.625rem;
+          padding: 0.3125rem 0;
+        }
+        .unknown:not(:last-child) {
+          border-bottom: 1px solid var(--border-subtle);
         }
         .unknown-severity {
           font-family: var(--font-mono);
-          font-size: 0.625rem;
-          font-weight: 600;
+          font-size: 0.5625rem;
+          font-weight: 500;
           text-transform: uppercase;
-          color: var(--danger);
-          min-width: 4rem;
+          letter-spacing: 0.04em;
+          color: var(--text-tertiary);
+          min-width: 3.5rem;
         }
         .unknown-desc {
+          font-family: var(--font-body);
           font-size: 0.8125rem;
           color: var(--text-secondary);
+          line-height: 1.4;
         }
       `}</style>
     </div>

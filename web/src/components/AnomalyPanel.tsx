@@ -6,10 +6,10 @@ interface Props {
   anomalies: AnomalyData[];
 }
 
-const SEVERITY_STYLES: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-  critical: { bg: "var(--danger-bg)", border: "var(--danger)", text: "var(--danger)", icon: "!!" },
-  high: { bg: "var(--warning-bg)", border: "var(--warning)", text: "var(--warning)", icon: "!" },
-  medium: { bg: "rgba(255,255,255,0.02)", border: "var(--text-ghost)", text: "var(--text-secondary)", icon: "~" },
+const SEVERITY_STYLES: Record<string, { border: string; text: string; icon: string }> = {
+  critical: { border: "var(--danger)", text: "var(--danger)", icon: "!!" },
+  high: { border: "var(--warning)", text: "var(--warning)", icon: "!" },
+  medium: { border: "var(--text-ghost)", text: "var(--text-secondary)", icon: "~" },
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -68,8 +68,7 @@ export default function AnomalyPanel({ anomalies }: Props) {
               key={anomaly.id || i}
               className="anomaly"
               style={{
-                background: style.bg,
-                borderLeft: `3px solid ${style.border}`,
+                borderLeft: `2px solid ${style.border}`,
               }}
             >
               <div className="anomaly-header">
@@ -103,32 +102,32 @@ export default function AnomalyPanel({ anomalies }: Props) {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius-lg);
-          padding: 1.5rem;
+          padding: 2rem;
         }
         .header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
+          align-items: baseline;
+          margin-bottom: 1.25rem;
         }
         h3 {
           font-family: var(--font-display);
-          font-size: 1.125rem;
+          font-size: 1rem;
           color: var(--text-heading);
-          margin: 0 0 1rem 0;
+          margin: 0;
           font-weight: 400;
         }
         .badges {
           display: flex;
-          gap: 0.5rem;
+          gap: 0.375rem;
         }
         .badge {
           font-family: var(--font-mono);
-          font-size: 0.625rem;
+          font-size: 0.5625rem;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          padding: 0.125rem 0.5rem;
-          border-radius: 999px;
+          padding: 0.0625rem 0.375rem;
+          border-radius: var(--radius-sm);
         }
         .badge.critical {
           background: var(--danger-bg);
@@ -139,42 +138,44 @@ export default function AnomalyPanel({ anomalies }: Props) {
           color: var(--warning);
         }
         .badge.medium {
-          background: rgba(255,255,255,0.03);
+          background: rgba(255,255,255,0.02);
           color: var(--text-tertiary);
         }
         .list {
           display: flex;
           flex-direction: column;
-          gap: 0.625rem;
+          gap: 0.5rem;
         }
         .anomaly {
-          padding: 0.75rem;
-          border-radius: 0.375rem;
+          padding: 0.625rem 0.625rem 0.625rem 0.875rem;
+          border-radius: 0;
         }
         .anomaly-header {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 0.375rem;
+          gap: 0.375rem;
+          margin-bottom: 0.25rem;
         }
         .icon {
-          font-weight: 700;
+          font-weight: 600;
           font-family: var(--font-mono);
+          font-size: 0.6875rem;
         }
         .type {
           font-family: var(--font-body);
-          font-weight: 600;
+          font-weight: 500;
           font-size: 0.8125rem;
           color: var(--text-heading);
         }
         .severity {
           font-family: var(--font-mono);
-          font-size: 0.625rem;
+          font-size: 0.5625rem;
           text-transform: uppercase;
           letter-spacing: 0.06em;
           margin-left: auto;
         }
         .description {
+          font-family: var(--font-body);
           font-size: 0.8125rem;
           color: var(--text-secondary);
           line-height: 1.5;
@@ -183,22 +184,24 @@ export default function AnomalyPanel({ anomalies }: Props) {
         .suggestions {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.375rem;
+          gap: 0.25rem;
           margin-top: 0.5rem;
         }
         .suggestion {
           font-family: var(--font-mono);
-          font-size: 0.625rem;
+          font-size: 0.5625rem;
           background: var(--accent-bg);
           color: var(--accent-dim);
           border: 1px solid var(--accent-border);
-          border-radius: 999px;
-          padding: 0.125rem 0.5rem;
+          border-radius: var(--radius-sm);
+          padding: 0.0625rem 0.375rem;
         }
         .empty {
           color: var(--text-ghost);
+          font-family: var(--font-body);
+          font-size: 0.8125rem;
           text-align: center;
-          padding: 2rem;
+          padding: 3rem 2rem;
         }
       `}</style>
     </div>

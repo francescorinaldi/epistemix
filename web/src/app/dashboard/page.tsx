@@ -46,9 +46,9 @@ export default function DashboardPage() {
           }
           .loading-text {
             font-family: var(--font-mono);
-            font-size: 0.8125rem;
+            font-size: 0.75rem;
             color: var(--text-tertiary);
-            letter-spacing: 0.12em;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
           }
         `}</style>
@@ -146,9 +146,9 @@ export default function DashboardPage() {
 
       <style jsx>{`
         main {
-          max-width: 1200px;
+          max-width: 1100px;
           margin: 0 auto;
-          padding: 0 2rem 4rem;
+          padding: 0 2.5rem 5rem;
           position: relative;
           z-index: 1;
         }
@@ -158,28 +158,26 @@ export default function DashboardPage() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 1.75rem 0;
+          padding: 2rem 0;
           border-bottom: 1px solid var(--border-subtle);
-          margin-bottom: 0.5rem;
+          margin-bottom: 1rem;
         }
         .logo {
-          font-family: var(--font-body);
-          font-size: 0.8125rem;
-          font-weight: 600;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--text-secondary);
+          font-family: var(--font-display);
+          font-size: 1.25rem;
+          font-weight: 400;
+          color: var(--text-heading);
           text-decoration: none;
           transition: color 0.2s;
         }
         .logo:hover {
-          color: var(--text-heading);
+          color: var(--accent);
           text-decoration: none;
         }
         .nav-right {
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 1.25rem;
         }
         .plan-badge {
           font-family: var(--font-mono);
@@ -195,8 +193,9 @@ export default function DashboardPage() {
         }
         .usage {
           font-family: var(--font-mono);
-          font-size: 0.75rem;
+          font-size: 0.6875rem;
           color: var(--text-tertiary);
+          letter-spacing: 0.02em;
         }
 
         /* ---- Header ---- */
@@ -204,59 +203,58 @@ export default function DashboardPage() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin: 2.5rem 0 1.75rem;
+          margin: 3rem 0 2rem;
         }
         h1 {
           font-family: var(--font-display);
-          font-size: 2rem;
+          font-size: 2.25rem;
           font-weight: 400;
           color: var(--text-heading);
         }
         .new-btn {
           display: inline-flex;
           align-items: center;
-          padding: 0.625rem 1.25rem;
+          padding: 0.625rem 1.5rem;
           background: var(--accent);
-          color: #0b0e15;
+          color: #0a0d12;
           border-radius: var(--radius-md);
           font-family: var(--font-body);
           font-weight: 600;
-          font-size: 0.875rem;
+          font-size: 0.8125rem;
+          letter-spacing: 0.01em;
           text-decoration: none;
-          transition: filter 0.2s, transform 0.2s;
+          transition: background 0.2s;
         }
         .new-btn:hover {
-          filter: brightness(1.1);
-          transform: translateY(-1px);
+          background: var(--accent-bright);
           text-decoration: none;
-          color: #0b0e15;
+          color: #0a0d12;
         }
 
         /* ---- Empty state ---- */
         .empty {
           text-align: center;
-          padding: 5rem 0;
-          color: var(--text-tertiary);
+          padding: 6rem 0;
         }
         .empty-prompt {
           font-family: var(--font-body);
-          font-size: 0.9375rem;
+          font-size: 0.875rem;
           color: var(--text-tertiary);
           margin-bottom: 0.5rem;
         }
         .empty-cta {
           font-family: var(--font-display);
           font-style: italic;
-          font-size: 1.125rem;
+          font-size: 1.25rem;
           color: var(--text-secondary);
-          margin-bottom: 2rem;
+          margin-bottom: 2.5rem;
         }
 
         /* ---- Grid ---- */
         .grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-          gap: 1rem;
+          gap: 1.25rem;
         }
 
         /* ---- Card ---- */
@@ -264,16 +262,14 @@ export default function DashboardPage() {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius-lg);
-          padding: 1.5rem;
+          padding: 2rem;
           display: block;
           color: inherit;
           text-decoration: none;
-          transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+          transition: border-color 0.3s;
         }
         .card:hover {
-          border-color: var(--accent-border);
-          box-shadow: var(--shadow-card);
-          transform: translateY(-2px);
+          border-color: var(--border-default);
           text-decoration: none;
           color: inherit;
         }
@@ -282,37 +278,33 @@ export default function DashboardPage() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 0.75rem;
+          margin-bottom: 1rem;
         }
 
         /* ---- Status badges ---- */
         .status {
           font-family: var(--font-mono);
-          font-size: 0.6875rem;
+          font-size: 0.625rem;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.08em;
           font-weight: 500;
-          padding: 0.125rem 0.625rem;
+          padding: 0.1875rem 0.5rem;
           border-radius: 999px;
         }
         .status-pending {
           background: var(--warning-bg);
-          border: 1px solid var(--warning-border);
           color: var(--warning);
         }
         .status-running {
           background: var(--info-bg);
-          border: 1px solid var(--info-border);
           color: var(--info);
         }
         .status-complete {
           background: var(--success-bg);
-          border: 1px solid var(--success-border);
           color: var(--success);
         }
         .status-failed {
           background: var(--danger-bg);
-          border: 1px solid var(--danger-border);
           color: var(--danger);
         }
 
@@ -323,43 +315,45 @@ export default function DashboardPage() {
           font-weight: 400;
           color: var(--text-heading);
           margin-bottom: 0.25rem;
-          line-height: 1.3;
+          line-height: 1.35;
         }
         .meta {
           font-size: 0.8125rem;
           color: var(--text-tertiary);
+          letter-spacing: 0.01em;
         }
 
         .stats-row {
           display: flex;
-          gap: 1.5rem;
-          margin-top: 1.25rem;
-          padding-top: 1rem;
+          gap: 2rem;
+          margin-top: 1.5rem;
+          padding-top: 1.25rem;
           border-top: 1px solid var(--border-subtle);
         }
         .stat {
           display: flex;
           flex-direction: column;
-          gap: 0.125rem;
+          gap: 0.1875rem;
         }
         .stat-val {
           font-family: var(--font-mono);
-          font-size: 1.125rem;
-          font-weight: 700;
+          font-size: 1rem;
+          font-weight: 600;
           color: var(--text-heading);
         }
         .stat-lbl {
           font-family: var(--font-mono);
-          font-size: 0.625rem;
+          font-size: 0.5625rem;
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.1em;
           color: var(--text-tertiary);
         }
 
         .date {
           font-family: var(--font-mono);
-          font-size: 0.6875rem;
+          font-size: 0.625rem;
           color: var(--text-ghost);
+          letter-spacing: 0.02em;
         }
       `}</style>
     </main>

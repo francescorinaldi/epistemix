@@ -34,7 +34,7 @@ export default function CycleTimeline({
             >
               <div className="dot">
                 {isComplete && (
-                  <svg width="12" height="12" viewBox="0 0 12 12">
+                  <svg width="10" height="10" viewBox="0 0 12 12">
                     <path
                       d="M2 6L5 9L10 3"
                       stroke="currentColor"
@@ -62,7 +62,7 @@ export default function CycleTimeline({
         >
           <div className="dot">
             {status === "complete" && (
-              <svg width="12" height="12" viewBox="0 0 12 12">
+              <svg width="10" height="10" viewBox="0 0 12 12">
                 <path
                   d="M2 6L5 9L10 3"
                   stroke="currentColor"
@@ -84,13 +84,13 @@ export default function CycleTimeline({
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius-lg);
-          padding: 1.5rem;
+          padding: 2rem;
         }
         h3 {
           font-family: var(--font-display);
-          font-size: 1.125rem;
+          font-size: 1rem;
           color: var(--text-heading);
-          margin: 0 0 1rem 0;
+          margin: 0 0 1.25rem 0;
           font-weight: 400;
         }
         .steps {
@@ -104,7 +104,7 @@ export default function CycleTimeline({
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          padding: 0.5rem 0;
+          padding: 0.375rem 0;
           position: relative;
         }
         .step::before {
@@ -123,8 +123,8 @@ export default function CycleTimeline({
           bottom: 50%;
         }
         .dot {
-          width: 22px;
-          height: 22px;
+          width: 18px;
+          height: 18px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -136,28 +136,28 @@ export default function CycleTimeline({
         }
         .complete .dot {
           background: var(--accent);
-          color: #0b0e15;
+          color: var(--bg-page);
         }
         .current .dot {
-          background: var(--bg-elevated);
-          border: 2px solid var(--accent);
+          background: transparent;
+          border: 1.5px solid var(--accent);
         }
         .pending .dot {
-          background: var(--bg-elevated);
-          border: 1px solid var(--border-default);
-          width: 22px;
-          height: 22px;
+          background: transparent;
+          border: 1px solid var(--border-subtle);
+          width: 18px;
+          height: 18px;
         }
         .pulse {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: var(--accent);
-          animation: pulse 1.5s ease-in-out infinite;
+          animation: pulse 2s ease-in-out infinite;
         }
         @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.5); }
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
         }
         .info {
           display: flex;
@@ -168,7 +168,7 @@ export default function CycleTimeline({
         .label {
           font-family: var(--font-body);
           font-size: 0.8125rem;
-          font-weight: 500;
+          font-weight: 400;
           color: var(--text-primary);
         }
         .pending .label {
@@ -176,19 +176,19 @@ export default function CycleTimeline({
         }
         .coverage {
           font-family: var(--font-mono);
-          font-size: 0.8125rem;
-          font-weight: 700;
-          color: var(--accent);
+          font-size: 0.75rem;
+          font-weight: 500;
+          color: var(--accent-dim);
         }
         .running {
           font-family: var(--font-mono);
-          font-size: 0.6875rem;
-          color: var(--warning);
-          animation: blink 1s ease-in-out infinite;
+          font-size: 0.625rem;
+          color: var(--text-tertiary);
+          animation: blink 1.5s ease-in-out infinite;
         }
         @keyframes blink {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
+          50% { opacity: 0.3; }
         }
       `}</style>
     </div>

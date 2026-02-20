@@ -68,14 +68,13 @@ export default function HomePage() {
   if (loading) {
     return (
       <main className={styles.main}>
-        <div className={styles.loading}>loading</div>
+        <div className={styles.loading} />
       </main>
     );
   }
 
   return (
     <main className={styles.main}>
-      {/* Navigation */}
       <nav className={styles.nav}>
         <span className={styles.logo}>Epistemix</span>
         <a
@@ -88,19 +87,19 @@ export default function HomePage() {
         </a>
       </nav>
 
-      {/* Hero */}
       <section className={styles.hero}>
-        <div className={styles.eyebrow}>Epistemic Audit Framework</div>
         <h1 className={styles.title}>
           Map the boundaries
           <br />
           of what is known
-          <span className={styles.titleAccent}>&mdash; and what isn&apos;t.</span>
+          <span className={styles.dash}> &mdash;</span>
+          <br />
+          <em>and what isn&apos;t.</em>
         </h1>
         <p className={styles.subtitle}>
-          Epistemix predicts what knowledge should exist about a research topic,
-          then verifies whether it does. The gap between expectation and
-          reality reveals the blind spots no one is looking for.
+          Epistemix predicts what knowledge should exist about a research
+          topic, then verifies whether it does. The gap reveals blind spots
+          no one is looking for.
         </p>
 
         <div className={styles.ctaWrap}>
@@ -109,7 +108,7 @@ export default function HomePage() {
             onClick={handleGoogleSignIn}
             disabled={signingIn}
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" className={styles.googleIcon}>
+            <svg viewBox="0 0 24 24" width="16" height="16">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
                 fill="#4285F4"
@@ -133,101 +132,84 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Divider */}
-      <div className={styles.divider}>
-        <div className={styles.dividerLine} />
-      </div>
-
-      {/* How it works */}
-      <section className={styles.howSection}>
-        <div className={styles.sectionLabel}>How it works</div>
-        <h2 className={styles.sectionTitle}>Three passes, converging on the unknown</h2>
+      <section className={styles.process}>
         <div className={styles.steps}>
           <div className={styles.step}>
-            <div className={styles.stepNumber}>01</div>
-            <div className={styles.stepTitle}>Predict</div>
+            <span className={styles.stepNum}>01</span>
+            <h3 className={styles.stepTitle}>Predict</h3>
             <p className={styles.stepDesc}>
               Seven meta-axioms about how academic knowledge is structured
-              generate testable hypotheses &mdash; postulates about what languages,
-              institutions, theories, and disciplines should be present.
+              generate testable hypotheses about what languages, institutions,
+              and theories should be present.
             </p>
           </div>
           <div className={styles.step}>
-            <div className={styles.stepNumber}>02</div>
-            <div className={styles.stepTitle}>Search</div>
+            <span className={styles.stepNum}>02</span>
+            <h3 className={styles.stepTitle}>Search</h3>
             <p className={styles.stepDesc}>
-              Multilingual queries reach across language barriers.
-              A monolingual search inherently misses perspectives &mdash; Epistemix
-              searches in English, Greek, French, German, Italian, and more.
+              Multilingual queries reach across language barriers. Epistemix
+              searches in English, Greek, French, German, Italian, and more
+              to surface perspectives a monolingual search would miss.
             </p>
           </div>
           <div className={styles.step}>
-            <div className={styles.stepNumber}>03</div>
-            <div className={styles.stepTitle}>Detect</div>
+            <span className={styles.stepNum}>03</span>
+            <h3 className={styles.stepTitle}>Detect</h3>
             <p className={styles.stepDesc}>
               Findings are compared against postulates. Gaps become anomalies:
-              missing disciplines, citation islands, echo chambers.
-              Coverage is always a lower bound &mdash; the map is never complete.
+              missing disciplines, citation islands, echo chambers. Coverage
+              is always a lower bound.
             </p>
           </div>
         </div>
       </section>
 
-      {/* Divider */}
-      <div className={styles.divider}>
-        <div className={styles.dividerLine} />
-      </div>
-
-      {/* Dual agent */}
-      <section className={styles.agentSection}>
-        <div className={styles.sectionLabel} style={{ marginTop: '3rem' }}>Dual-agent verification</div>
-        <h2 className={styles.sectionTitle}>Two perspectives. One truth.</h2>
-        <div className={styles.agentCard}>
+      <section className={styles.agents}>
+        <div className={styles.agentContent}>
           <div className={styles.agentText}>
-            <h2>Where they disagree,<br />you have a blind spot</h2>
+            <h2>Two perspectives.<br />One truth.</h2>
             <p>
-              Agent &alpha; focuses on institutional structure &mdash; languages,
-              institutions, citation schools, publication channels. Agent &beta;
-              focuses on theoretical substance &mdash; competing theories,
-              disciplinary breadth, temporal evolution.
+              Agent &alpha; examines institutional structure &mdash; languages,
+              citation schools, publication channels. Agent &beta; examines
+              theoretical substance &mdash; competing theories, disciplinary
+              breadth, temporal evolution.
             </p>
             <p>
-              An independent arbiter compares their reports. Agreements
-              strengthen confidence. Disagreements become <em>known unknowns</em>&nbsp;&mdash;
-              the most valuable output of the audit.
+              Where they disagree, you have a blind spot. An independent
+              arbiter compares their reports. Disagreements become{" "}
+              <em>known unknowns</em> &mdash; the most valuable output of the audit.
             </p>
-            <div className={styles.agentFormula}>
-              coverage = min(&alpha;, &beta;)&nbsp;&nbsp;&middot;&nbsp;&nbsp;blindness gap = max(&alpha;,&beta;) - min(&alpha;,&beta;)
-            </div>
           </div>
-          <div className={styles.agentVisual}>
-            <div className={styles.agentBar}>
-              <span className={styles.agentLabel}>Agent &alpha;</span>
-              <div className={styles.barTrack}>
-                <div className={styles.barFillAlpha} />
+          <div className={styles.agentViz}>
+            <div className={styles.vizRow}>
+              <span className={styles.vizLabel}>Agent &alpha;</span>
+              <div className={styles.vizTrack}>
+                <div className={styles.vizAlpha} />
               </div>
+              <span className={styles.vizVal}>72%</span>
             </div>
-            <div className={styles.agentBar}>
-              <span className={styles.agentLabel}>Agent &beta;</span>
-              <div className={styles.barTrack}>
-                <div className={styles.barFillBeta} />
+            <div className={styles.vizRow}>
+              <span className={styles.vizLabel}>Agent &beta;</span>
+              <div className={styles.vizTrack}>
+                <div className={styles.vizBeta} />
               </div>
+              <span className={styles.vizVal}>58%</span>
             </div>
-            <div className={styles.agentDivider}>disagreement zone</div>
-            <div className={styles.agentBar}>
-              <span className={styles.agentLabel}>Gap</span>
-              <div className={styles.barTrack}>
-                <div className={styles.barFillGap} />
+            <div className={styles.vizSep} />
+            <div className={styles.vizRow}>
+              <span className={styles.vizLabel}>Gap</span>
+              <div className={styles.vizTrack}>
+                <div className={styles.vizGap} />
               </div>
+              <span className={styles.vizVal}>14pt</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
       <footer className={styles.footer}>
-        <span className={styles.footerText}>Epistemix v0.2.0</span>
-        <span className={styles.footerText}>MIT License</span>
+        <span>Epistemix v0.2.0</span>
+        <span>MIT License</span>
       </footer>
     </main>
   );

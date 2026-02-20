@@ -146,34 +146,38 @@ export default function AuditForm() {
 
       <style jsx>{`
         .audit-form {
-          max-width: 480px;
+          max-width: 440px;
           margin: 0 auto;
           display: flex;
           flex-direction: column;
-          gap: 1.5rem;
+          gap: 1.75rem;
         }
         .form-group {
           display: flex;
           flex-direction: column;
-          gap: 0.375rem;
+          gap: 0.5rem;
         }
         label {
           font-family: var(--font-mono);
-          font-size: 0.75rem;
+          font-size: 0.6875rem;
           font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: var(--text-secondary);
+          color: var(--text-tertiary);
         }
         input[type="text"],
         select {
-          padding: 0.75rem 0.875rem;
-          background: var(--bg-card);
+          padding: 0.8125rem 0.875rem;
+          background: transparent;
           border: 1px solid var(--border-default);
           border-radius: var(--radius-sm);
           color: var(--text-heading);
           font-family: var(--font-body);
-          font-size: 0.9375rem;
+          font-size: 0.875rem;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input[type="text"]::placeholder {
+          color: var(--text-tertiary);
         }
         input[type="text"]:focus,
         select:focus {
@@ -184,42 +188,45 @@ export default function AuditForm() {
         input[type="range"] {
           flex: 1;
           accent-color: var(--accent);
+          margin-top: 0.25rem;
         }
         .cycle-count {
           font-family: var(--font-mono);
-          font-size: 1.125rem;
-          font-weight: 700;
+          font-size: 1rem;
+          font-weight: 600;
           color: var(--accent);
         }
         button {
-          padding: 0.875rem;
+          padding: 0.8125rem;
+          margin-top: 0.5rem;
           border: none;
           border-radius: var(--radius-md);
           background: var(--accent);
-          color: #0b0e15;
+          color: var(--bg-page);
           font-weight: 600;
           font-family: var(--font-body);
-          font-size: 0.9375rem;
+          font-size: 0.875rem;
           cursor: pointer;
-          transition: filter 0.2s, transform 0.2s;
+          transition: opacity 0.2s;
         }
         button:hover:not(:disabled) {
-          filter: brightness(1.1);
-          transform: translateY(-1px);
+          opacity: 0.9;
         }
         button:disabled {
-          opacity: 0.5;
+          opacity: 0.4;
           cursor: not-allowed;
         }
         .error {
           color: var(--danger);
-          font-size: 0.8125rem;
+          font-size: 0.75rem;
+          margin: 0;
         }
         .upgrade-hint {
           font-family: var(--font-mono);
-          font-size: 0.75rem;
+          font-size: 0.6875rem;
           color: var(--text-tertiary);
           text-align: center;
+          margin: 0;
         }
       `}</style>
     </form>

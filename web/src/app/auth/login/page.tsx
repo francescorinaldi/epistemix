@@ -92,47 +92,48 @@ export default function LoginPage() {
         }
         .container {
           width: 100%;
-          max-width: 380px;
+          max-width: 360px;
         }
         h1 {
           text-align: center;
           font-family: var(--font-display);
-          font-size: 2.25rem;
+          font-size: 2rem;
           font-weight: 400;
           color: var(--text-heading);
-          margin-bottom: 0.5rem;
+          margin: 0 0 0.375rem;
         }
         .subtitle {
           text-align: center;
           font-family: var(--font-body);
-          font-size: 0.9375rem;
-          color: var(--text-tertiary);
-          margin-bottom: 2rem;
+          font-size: 0.875rem;
+          color: var(--text-secondary);
+          margin: 0 0 2.5rem;
         }
         .google-btn {
           width: 100%;
           padding: 0.75rem;
           border: 1px solid var(--border-default);
           border-radius: var(--radius-md);
-          background: var(--bg-elevated);
+          background: transparent;
           color: var(--text-primary);
           font-family: var(--font-body);
-          font-size: 0.9375rem;
+          font-size: 0.875rem;
           cursor: pointer;
-          transition: border-color 0.2s, background 0.2s;
+          transition: border-color 0.2s;
         }
         .google-btn:hover {
           border-color: var(--accent-border);
-          background: var(--bg-hover);
         }
         .divider {
           display: flex;
           align-items: center;
-          gap: 1rem;
-          margin: 1.5rem 0;
+          gap: 0.75rem;
+          margin: 1.75rem 0;
           color: var(--text-ghost);
           font-family: var(--font-mono);
-          font-size: 0.6875rem;
+          font-size: 0.625rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
         .divider::before,
         .divider::after {
@@ -144,17 +145,20 @@ export default function LoginPage() {
         form {
           display: flex;
           flex-direction: column;
-          gap: 0.75rem;
+          gap: 0.875rem;
         }
         input {
-          padding: 0.75rem 0.875rem;
+          padding: 0.8125rem 0.875rem;
           border: 1px solid var(--border-default);
           border-radius: var(--radius-sm);
-          background: var(--bg-card);
+          background: transparent;
           color: var(--text-heading);
           font-family: var(--font-body);
-          font-size: 0.9375rem;
+          font-size: 0.875rem;
           transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input::placeholder {
+          color: var(--text-tertiary);
         }
         input:focus {
           outline: none;
@@ -163,33 +167,34 @@ export default function LoginPage() {
         }
         button[type="submit"] {
           width: 100%;
-          padding: 0.75rem;
+          padding: 0.8125rem;
+          margin-top: 0.25rem;
           border: none;
           border-radius: var(--radius-md);
           background: var(--accent);
-          color: #0b0e15;
+          color: var(--bg-page);
           font-family: var(--font-body);
-          font-size: 0.9375rem;
+          font-size: 0.875rem;
           font-weight: 600;
           cursor: pointer;
-          transition: filter 0.2s;
+          transition: opacity 0.2s;
         }
         button[type="submit"]:hover:not(:disabled) {
-          filter: brightness(1.1);
+          opacity: 0.9;
         }
         button[type="submit"]:disabled {
-          opacity: 0.5;
+          opacity: 0.4;
           cursor: not-allowed;
         }
         .error {
           color: var(--danger);
-          font-size: 0.8125rem;
+          font-size: 0.75rem;
           margin: 0;
         }
         .toggle {
           text-align: center;
-          margin-top: 1.5rem;
-          font-size: 0.8125rem;
+          margin-top: 2rem;
+          font-size: 0.75rem;
           color: var(--text-tertiary);
         }
         .link {
@@ -197,8 +202,12 @@ export default function LoginPage() {
           border: none;
           color: var(--accent);
           cursor: pointer;
-          font-size: 0.8125rem;
+          font-size: 0.75rem;
           padding: 0;
+          font-family: var(--font-body);
+        }
+        .link:hover {
+          color: var(--accent-bright);
         }
       `}</style>
     </main>
