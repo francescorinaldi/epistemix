@@ -1,253 +1,205 @@
 """Amphipolis 4-cycle simulation — the reference scenario.
 
-This test simulates a realistic epistemic audit of the Amphipolis tomb,
-with carefully crafted mock responses that exercise all modules across
-4 cycles of increasing depth.
+Simulates a realistic epistemic audit of the Amphipolis tomb,
+using the founder's rich simulation data converted to pytest.
+Tests coverage progression, entity discovery, anomaly detection,
+and multi-agent divergence.
 """
 
-from epistemix.connector import MockConnector
-from epistemix.core import EpistemicEngine
-from epistemix.multi_agent import MultiAgentSystem
-from epistemix.models import (
-    AnomalyType,
-    FindingType,
-    PostulateStatus,
-    ResearchState,
-    Severity,
+from epistemix.core import DynamicPostulates, EpistemixEngine
+from epistemix.citation_graph import CitationGraph
+from epistemix.disciplines import DisciplineAnalyzer
+from epistemix.multi_agent import (
+    AgentInstitutional,
+    AgentTheoretical,
+    Arbiter,
+    MultiAgentSystem,
 )
-
-
-# Cycle-by-cycle mock responses simulating increasing depth of discovery
-AMPHIPOLIS_SIMULATION = {
-    # Cycle 0: Initial discovery — basic facts
-    "amphipolis tomb excavation": (
-        "The Amphipolis tomb is a large Macedonian burial monument discovered "
-        "in 2012 near Amphipolis in northern Greece. Lead archaeologist "
-        "Dr. Katerina Peristeri directed the excavation under the Hellenic "
-        "Ministry of Culture. The tomb dates to the last quarter of the 4th "
-        "century BC. It features caryatid sculptures at the entrance and a "
-        "mosaic floor depicting the abduction of Persephone by Pluto. "
-        "Some researchers believe it was built for Alexander the Great or "
-        "his companion Hephaestion."
-    ),
-    "amphipolis tomb greece archaeology key researchers": (
-        "Key researchers include Dr. Katerina Peristeri (lead excavator), "
-        "Prof. Michalis Lefantzis (architect who studied tomb structure), and "
-        "Dimitrios Lazaridis who pioneered earlier excavations in the 1960s. "
-        "The Hellenic Ministry of Culture and the Aristotle University of "
-        "Thessaloniki have been involved."
-    ),
-    "amphipolis tomb greece theories interpretations": (
-        "Major theories about the tomb's occupant include: "
-        "1) The theory that the tomb was built as a memorial for Alexander the Great, "
-        "though his body was likely taken to Alexandria. "
-        "2) The Hephaestion memorial hypothesis, based on historical accounts of "
-        "Alexander commissioning a grand memorial for his companion. "
-        "3) The theory that a royal family member of the Macedonian dynasty, "
-        "possibly Roxana or Alexander IV, was buried here."
-    ),
-    "amphipolis tomb greece institutions involved": (
-        "Key institutions: Hellenic Ministry of Culture (oversight), "
-        "Aristotle University of Thessaloniki (analysis and support), "
-        "the Archaeological Museum of Amphipolis (artifact storage). "
-        "International interest from the Academy of Athens and various "
-        "foreign archaeological schools in Athens."
-    ),
-    "amphipolis tomb greece publications review": (
-        "Peristeri published initial findings in Archaiologiko Deltion. "
-        "International coverage appeared in journals like the American "
-        "Journal of Archaeology. Conference presentations at the "
-        "Archaeological Institute of America annual meetings."
-    ),
-    "amphipolis tomb greece recent discoveries": (
-        "Recent discoveries include human remains of at least five individuals "
-        "with skeletal fragments analyzed. Inscriptions found near the entrance "
-        "may provide clues about the occupant. A throne room with detailed "
-        "floor mosaic artwork was uncovered in 2014."
-    ),
-
-    # Cycle 1 and beyond: deeper investigation
-    "alternative research groups": (
-        "Dr. Angeliki Kottaridi, who excavated at Vergina, provides "
-        "comparative analysis. Prof. Manolis Andronikos established the "
-        "framework for Macedonian royal tombs at Vergina. The French School "
-        "at Athens (École française d'Athènes) has published comparative studies."
-    ),
-    "competing interpretations": (
-        "Dr. Andrew Stewart from University of California has argued the "
-        "dating needs revision. Prof. Olga Palagia from University of Athens "
-        "suggested the tomb may be later than initially proposed. The debate "
-        "between institutional researchers and independent scholars continues."
-    ),
-    "amphipolis inscriptions epigrapher": (
-        "The inscriptions found at Amphipolis have not yet been fully studied "
-        "by a specialist epigrapher. This represents a gap in the research. "
-        "Prof. Angelos Chaniotis from the Institute for Advanced Study could "
-        "contribute expertise."
-    ),
-    "amphipolis skeletal analysis osteologist": (
-        "Skeletal analysis was initiated but comprehensive osteological study "
-        "by a specialist has not been published. The bones of five individuals "
-        "could reveal crucial information about identity and health."
-    ),
-    "epigraphy specialist research": (
-        "Epigraphy of the Macedonian period is a specialized field. "
-        "Key epigraphers include Prof. Miltiades Hatzopoulos who studied "
-        "Macedonian inscriptions extensively."
-    ),
-    "osteology analysis findings": (
-        "Osteological analysis of ancient Greek burials has been advanced by "
-        "scholars like Dr. Anastasia Tsaliki who specializes in archaeological "
-        "human remains from Greece."
-    ),
-    "art history analysis findings": (
-        "The Persephone mosaic has been compared to other Macedonian art. "
-        "Art historian Dr. Maria Tsimbidou-Avloniti has published extensively "
-        "on Macedonian tomb paintings and mosaics."
-    ),
-
-    # Broadening queries
-    "amphipolis tomb greece criticism debate controversy": (
-        "The controversy around the tomb centers on its occupant. The Greek "
-        "government's handling of the excavation was criticized by some academics. "
-        "Dr. Liana Souvaltzi previously claimed to have found Alexander's tomb "
-        "in Egypt, a claim widely rejected. The Amphipolis discovery reignited "
-        "these debates."
-    ),
-    "amphipolis tomb greece alternative interpretations": (
-        "Alternative interpretations include the possibility that the tomb "
-        "served multiple functions over centuries. Some scholars suggest it "
-        "was originally a heroon (hero shrine) later converted to a burial. "
-        "The presence of five individuals supports a multi-phase use theory."
-    ),
-
-    # Default for any unmatched query
-    "default": (
-        "Further research on the Amphipolis tomb continues to reveal new "
-        "aspects of Macedonian funerary practices and Hellenistic culture."
-    ),
-}
+from epistemix.models import GapType
 
 
 class TestAmphipolisSimulation:
-    def _run_engine(self, max_cycles: int = 4) -> EpistemicEngine:
-        mc = MockConnector(AMPHIPOLIS_SIMULATION)
-        state = ResearchState(
-            topic="Amphipolis tomb excavation",
-            country="Greece",
-            discipline="archaeology",
-        )
-        engine = EpistemicEngine(connector=mc, state=state)
-        engine.run_all_cycles(max_cycles=max_cycles)
-        return engine
+    """Tests using the Amphipolis reference scenario."""
 
-    def test_cycle_0_basics(self):
-        """Cycle 0 should establish basic facts."""
-        engine = self._run_engine(max_cycles=1)
-        state = engine.state
+    def test_cycle_0_discovers_key_entities(self, cycle_0_findings):
+        """First cycle should discover major researchers."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        new_entities = engine.ingest_findings(cycle_0_findings)
 
-        # Should find at least some scholars
-        scholars = [f for f in state.findings if f.finding_type == FindingType.SCHOLAR]
-        assert len(scholars) >= 1, f"Found {len(scholars)} scholars: {[s.name for s in scholars]}"
+        # Should discover key figures
+        entity_names_lower = [e.lower() for e in new_entities]
+        assert any("peristeri" in n for n in entity_names_lower)
+        assert any("chugg" in n for n in entity_names_lower)
 
-        # Should have initialized postulates
-        assert len(state.postulates) >= 14
+    def test_cycle_0_tracks_theories(self, cycle_0_findings):
+        """First cycle should identify major theories."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings(cycle_0_findings)
+        engine.run_cycle()
 
-        # Coverage should be non-zero
-        cov = state.current_coverage()
-        assert cov.total > 0
+        theories = engine.postulates.theories
+        assert any("Hephaestion" in t for t in theories)
+        assert any("Olympias" in t for t in theories)
 
-    def test_coverage_progression(self):
-        """Coverage should generally progress over cycles."""
-        engine = self._run_engine(max_cycles=4)
-        history = engine.state.coverage_history
+    def test_coverage_progression(
+        self, cycle_0_findings, cycle_1_findings,
+        cycle_2_findings, cycle_3_findings,
+    ):
+        """Coverage should improve across cycles."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
 
-        assert len(history) >= 2
-        # Total postulates should grow (denominator increases)
-        assert history[-1].total >= history[0].total
-
-    def test_multiple_finding_types(self):
-        """Should discover diverse entity types."""
-        engine = self._run_engine(max_cycles=3)
-        types = {f.finding_type for f in engine.state.findings}
-        assert FindingType.SCHOLAR in types
-        # Should find at least 2 different types
-        assert len(types) >= 2
-
-    def test_anomaly_detection(self):
-        """Should detect anomalies across cycles."""
-        engine = self._run_engine(max_cycles=3)
-        # Should detect at least some anomalies
-        assert len(engine.state.anomalies) >= 0
-
-    def test_discipline_gaps_detected(self):
-        """Evidence types should trigger discipline expectations."""
-        engine = self._run_engine(max_cycles=2)
-        # The mock data mentions inscriptions, human remains, and mosaics
-        # These should generate discipline expectations
-        expected = engine.discipline_expectations.all_expected_disciplines
-        # We expect at least some disciplines based on evidence keywords
-        # (depends on how well the mock data triggers the keyword matching)
-        assert len(expected) >= 0  # Will be > 0 if evidence extraction works
-
-    def test_postulate_confirmation(self):
-        """Some postulates should get confirmed over cycles."""
-        engine = self._run_engine(max_cycles=3)
-        confirmed = [
-            p for p in engine.state.postulates
-            if p.status == PostulateStatus.CONFIRMED
+        cycles = [
+            cycle_0_findings, cycle_1_findings,
+            cycle_2_findings, cycle_3_findings,
         ]
-        # At least some postulates should be confirmed with rich mock data
-        assert len(confirmed) >= 1
+        for findings in cycles:
+            engine.ingest_findings(findings)
+            engine.run_cycle()
 
-    def test_deduplication(self):
-        """Same entities found in different cycles should be deduplicated."""
-        engine = self._run_engine(max_cycles=4)
-        unique = engine.state.unique_findings
-        total = len(engine.state.findings)
-        # unique should equal total (no raw duplicates stored)
-        assert len(unique) == total
+        # Should have 4 snapshots
+        assert len(engine.cycle_history) == 4
 
-    def test_serialization(self):
-        """Full state should serialize to dict."""
-        engine = self._run_engine(max_cycles=3)
-        d = engine.state.to_dict()
-        assert d["topic"] == "Amphipolis tomb excavation"
-        assert d["country"] == "Greece"
-        assert isinstance(d["coverage_history"], list)
-        assert d["total_findings"] >= 1
+        # More expectations should be met over time
+        met_counts = [s.n_expectations_met for s in engine.cycle_history]
+        assert met_counts[-1] >= met_counts[0]
+
+    def test_multilingual_coverage(
+        self, cycle_0_findings, cycle_1_findings,
+    ):
+        """Finds should span multiple languages."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings(cycle_0_findings)
+        engine.ingest_findings(cycle_1_findings)
+        engine.run_cycle()
+
+        languages = engine.postulates.languages_covered
+        assert "en" in languages
+        assert "el" in languages
+        # Cycle 1 adds Italian and French
+        assert "it" in languages or "fr" in languages
+
+    def test_transliteration_normalization(self, cycle_1_findings):
+        """Efestione (Italian) should normalize to Hephaestion."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings(cycle_1_findings)
+
+        # Check if Mavrogiannis's mentions of "Anfipoli" are normalized
+        entities = engine.postulates.entities
+        # "Efestione" mentioned in cycle_1 should normalize
+        assert "hephaestion" in entities or any(
+            "hephaestion" in k for k in entities
+        )
+
+    def test_discipline_gap_detection(self, all_findings):
+        """Should detect missing specialist disciplines."""
+        analyzer = DisciplineAnalyzer("archaeology")
+        analyzer.ingest_findings(all_findings)
+        anomalies = analyzer.generate_anomalies()
+
+        # With our data, some disciplines should be missing
+        gap_types = [a.gap_type for a in anomalies]
+        assert GapType.DISCIPLINE_GAP in gap_types
+
+    def test_citation_graph_structure(self, all_findings):
+        """Citation graph should reflect the research network."""
+        graph = CitationGraph()
+        graph.build_from_findings(all_findings)
+
+        assert len(graph.nodes) > 5
+        assert len(graph.edges) > 0
+
+        # Key researchers should be investigated
+        if "katerina peristeri" in graph.nodes:
+            assert graph.nodes["katerina peristeri"].investigated
+
+    def test_serialization(
+        self, cycle_0_findings, cycle_1_findings,
+    ):
+        """Engine state should serialize cleanly."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings(cycle_0_findings)
+        engine.run_cycle()
+        engine.ingest_findings(cycle_1_findings)
+        engine.run_cycle()
+
+        d = engine.to_dict()
+        assert d["cycle"] == 2
+        assert len(d["coverage_history"]) == 2
+        assert len(d["findings"]) > 0
+        assert isinstance(d["coverage_percentage"], float)
 
 
 class TestAmphipolisMultiAgent:
-    def test_dual_agent_run(self):
-        """Multi-agent system should complete with distinct reports."""
-        mc = MockConnector(AMPHIPOLIS_SIMULATION)
-        mas = MultiAgentSystem(
-            connector=mc,
-            topic="Amphipolis tomb excavation",
-            country="Greece",
-            discipline="archaeology",
-            max_cycles=2,
-        )
-        result = mas.run()
+    """Multi-agent tests with Amphipolis data."""
 
-        assert result["alpha"]["coverage"] >= 0
-        assert result["beta"]["coverage"] >= 0
-        assert result["combined"]["blindness_gap"] >= 0
-        assert len(result["agreements"]) >= 1
+    def test_dual_agent_produces_results(self, all_findings):
+        """Both agents should produce meaningful reports."""
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
 
-    def test_multi_agent_has_known_unknowns_or_discrepancies(self):
-        """The dual perspectives should generate some discrepancies."""
-        mc = MockConnector(AMPHIPOLIS_SIMULATION)
-        mas = MultiAgentSystem(
-            connector=mc,
-            topic="Amphipolis tomb excavation",
-            country="Greece",
-            discipline="archaeology",
-            max_cycles=3,
+        alpha = AgentInstitutional(post)
+        beta = AgentTheoretical(post)
+
+        report_a = alpha.audit(all_findings)
+        report_b = beta.audit(all_findings)
+
+        assert len(report_a.expectations) > 0
+        assert len(report_b.expectations) > 0
+        assert report_a.coverage_score >= 0
+        assert report_b.coverage_score >= 0
+
+    def test_agents_find_different_anomalies(self, all_findings):
+        """Agents with different focuses should find different issues."""
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+
+        alpha = AgentInstitutional(post)
+        beta = AgentTheoretical(post)
+
+        report_a = alpha.audit(all_findings)
+        report_b = beta.audit(all_findings)
+
+        # They should have different gap types in their anomalies
+        alpha_types = {a.gap_type for a in report_a.anomalies}
+        beta_types = {a.gap_type for a in report_b.anomalies}
+        # At least one type should differ
+        assert alpha_types != beta_types or (
+            len(report_a.anomalies) == 0 and len(report_b.anomalies) == 0
         )
-        result = mas.run()
-        # Should have at least agreements (always has at least one)
-        assert len(result["agreements"]) >= 1
-        # The combined result should be a valid dict
-        assert "coverage" in result["combined"]
+
+    def test_arbiter_finds_known_unknowns(self, all_findings):
+        """Arbiter should identify discrepancies between agents."""
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+
+        system = MultiAgentSystem(post)
+        result = system.run(all_findings)
+
+        assert "combined" in result
+        assert "known_unknowns" in result["combined"]
+        assert result["combined"]["total_anomalies"] >= 0
+
+    def test_multi_agent_serialization(self, all_findings):
+        """Multi-agent result should serialize for database."""
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+
+        system = MultiAgentSystem(post)
+        result = system.run(all_findings)
+
+        # Check structure matches what worker writes to DB
+        assert "alpha" in result
+        assert "beta" in result
+        assert "coverage" in result["alpha"]
+        assert "coverage" in result["beta"]
+        assert "blindness_gap" in result["combined"]

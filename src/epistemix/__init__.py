@@ -4,35 +4,37 @@ Detect unknown unknowns in research by predicting what knowledge
 should exist, then verifying whether it does.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from epistemix.models import (
+    AgentReport,
     Anomaly,
-    AnomalyType,
-    CoverageScore,
+    CycleSnapshot,
+    Discrepancy,
+    Entity,
+    EntityType,
+    Expectation,
     Finding,
-    FindingType,
-    Postulate,
-    PostulateStatus,
-    Query,
+    GapType,
     QueryLanguage,
-    ResearchState,
+    SearchQuery,
     Severity,
 )
 from epistemix.meta_axioms import META_AXIOMS, MetaAxiom
 
 __all__ = [
+    "AgentReport",
     "Anomaly",
-    "AnomalyType",
-    "CoverageScore",
+    "CycleSnapshot",
+    "Discrepancy",
+    "Entity",
+    "EntityType",
+    "Expectation",
     "Finding",
-    "FindingType",
+    "GapType",
     "MetaAxiom",
     "META_AXIOMS",
-    "Postulate",
-    "PostulateStatus",
-    "Query",
     "QueryLanguage",
-    "ResearchState",
+    "SearchQuery",
     "Severity",
 ]

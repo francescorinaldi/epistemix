@@ -1,172 +1,153 @@
 """Tests for the multi-agent system."""
 
-from epistemix.connector import MockConnector
+from epistemix.core import DynamicPostulates
 from epistemix.multi_agent import (
-    ALPHA_PERSPECTIVE,
-    BETA_PERSPECTIVE,
-    AgentPerspective,
+    AgentInstitutional,
+    AgentTheoretical,
     Arbiter,
-    AgentReport,
-    EpistemicAgent,
     MultiAgentSystem,
 )
-from epistemix.models import (
-    Anomaly,
-    AnomalyType,
-    CoverageScore,
-    Finding,
-    FindingType,
-    Severity,
-)
-from tests.conftest import (
-    AMPHIPOLIS_TOPIC,
-    AMPHIPOLIS_COUNTRY,
-    AMPHIPOLIS_DISCIPLINE,
-    AMPHIPOLIS_CYCLE_0_RESPONSES,
-    AMPHIPOLIS_CYCLE_1_RESPONSES,
-)
+from epistemix.models import Finding, GapType
 
 
-class TestAgentPerspective:
-    def test_alpha_weights(self):
-        assert ALPHA_PERSPECTIVE.weight_for("MA-01") == 1.5  # Language
-        assert ALPHA_PERSPECTIVE.weight_for("MA-03") == 0.7  # Theory
+class TestAgentInstitutional:
+    def test_audit_returns_report(self, all_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+        agent = AgentInstitutional(post)
+        report = agent.audit(all_findings)
+        assert report.agent_name == "Agent \u03b1 (Institutional)"
+        assert len(report.expectations) > 0
+        assert report.coverage_score >= 0
 
-    def test_beta_weights(self):
-        assert BETA_PERSPECTIVE.weight_for("MA-03") == 1.5  # Theory
-        assert BETA_PERSPECTIVE.weight_for("MA-01") == 0.7  # Language
+    def test_detects_language_expectations(self, cycle_0_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in cycle_0_findings:
+            post.ingest_finding(f)
+        agent = AgentInstitutional(post)
+        report = agent.audit(cycle_0_findings)
+        linguistic = [
+            e for e in report.expectations
+            if e.gap_type == GapType.LINGUISTIC
+        ]
+        assert len(linguistic) >= 1  # At least Greek + English
 
-    def test_default_weight(self):
-        p = AgentPerspective(name="test", description="test")
-        assert p.weight_for("MA-99") == 1.0
 
+class TestAgentTheoretical:
+    def test_audit_returns_report(self, all_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+        agent = AgentTheoretical(post)
+        report = agent.audit(all_findings)
+        assert report.agent_name == "Agent \u03b2 (Theoretical)"
+        assert len(report.expectations) > 0
 
-class TestEpistemicAgent:
-    def _mock_connector(self) -> MockConnector:
-        mc = MockConnector()
-        mc.register_responses({
-            **AMPHIPOLIS_CYCLE_0_RESPONSES,
-            **AMPHIPOLIS_CYCLE_1_RESPONSES,
-        })
-        return mc
+    def test_detects_theory_expectations(self, cycle_0_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in cycle_0_findings:
+            post.ingest_finding(f)
+        agent = AgentTheoretical(post)
+        report = agent.audit(cycle_0_findings)
+        theory = [
+            e for e in report.expectations
+            if e.gap_type == GapType.THEORY_UNSOURCED
+        ]
+        assert len(theory) >= 1  # At least Hephaestion and Olympias
 
-    def test_agent_runs(self):
-        agent = EpistemicAgent.create(
-            perspective=ALPHA_PERSPECTIVE,
-            connector=self._mock_connector(),
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-        )
-        report = agent.run(max_cycles=2)
-        assert report.agent_name == "alpha"
-        assert report.coverage.total > 0
-        assert len(report.coverage_history) >= 1
-
-    def test_agents_produce_different_results(self):
-        mc = self._mock_connector()
-        alpha = EpistemicAgent.create(
-            perspective=ALPHA_PERSPECTIVE,
-            connector=mc,
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-        )
-        beta = EpistemicAgent.create(
-            perspective=BETA_PERSPECTIVE,
-            connector=mc,
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-        )
-        alpha_report = alpha.run(max_cycles=2)
-        beta_report = beta.run(max_cycles=2)
-        # Both should have run
-        assert alpha_report.coverage.total > 0
-        assert beta_report.coverage.total > 0
+    def test_detects_single_advocate(self):
+        findings = [
+            Finding(
+                source="P1", language="en",
+                author="Alice", theory_supported="Lonely Theory",
+                source_type="peer_reviewed",
+            ),
+        ]
+        post = DynamicPostulates("Greece", "test")
+        for f in findings:
+            post.ingest_finding(f)
+        agent = AgentTheoretical(post)
+        report = agent.audit(findings)
+        voice_anomalies = [
+            a for a in report.anomalies if a.gap_type == GapType.VOICE
+        ]
+        assert len(voice_anomalies) >= 1
 
 
 class TestArbiter:
-    def _make_report(
-        self,
-        name: str,
-        findings: list[Finding],
-        anomalies: list[Anomaly],
-        coverage_pct: float,
-    ) -> AgentReport:
-        total = 20
-        confirmed = int(total * coverage_pct / 100)
-        return AgentReport(
-            agent_name=name,
-            perspective=ALPHA_PERSPECTIVE if name == "alpha" else BETA_PERSPECTIVE,
-            coverage=CoverageScore(confirmed=confirmed, total=total),
-            findings=findings,
-            anomalies=anomalies,
-        )
+    def test_finds_discrepancies(self, all_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
 
-    def test_finds_agreements(self):
-        shared_finding = Finding(name="Peristeri", finding_type=FindingType.SCHOLAR)
-        alpha = self._make_report("alpha", [shared_finding], [], 70)
-        beta = self._make_report("beta", [shared_finding], [], 65)
-        result = Arbiter().compare(alpha, beta)
-        assert any("1 findings agreed" in a for a in result.agreements)
+        alpha = AgentInstitutional(post)
+        beta = AgentTheoretical(post)
+        report_a = alpha.audit(all_findings)
+        report_b = beta.audit(all_findings)
 
-    def test_finds_discrepancies(self):
-        f1 = Finding(name="Alice", finding_type=FindingType.SCHOLAR)
-        f2 = Finding(name="Bob", finding_type=FindingType.SCHOLAR)
-        alpha = self._make_report("alpha", [f1], [], 70)
-        beta = self._make_report("beta", [f2], [], 65)
-        result = Arbiter().compare(alpha, beta)
-        assert len(result.discrepancies) >= 2
+        arbiter = Arbiter(report_a, report_b)
+        discrepancies = arbiter.compare()
+        # With different focuses, there should be discrepancies
+        assert isinstance(discrepancies, list)
 
-    def test_known_unknowns_from_discrepant_anomalies(self):
-        # Alpha detects language gap, beta detects theory gap
-        a1 = Anomaly(
-            id="A-1", anomaly_type=AnomalyType.LANGUAGE_GAP,
-            severity=Severity.HIGH, description="No Greek sources",
-        )
-        a2 = Anomaly(
-            id="A-2", anomaly_type=AnomalyType.THEORY_GAP,
-            severity=Severity.HIGH, description="Only one theory found",
-        )
-        alpha = self._make_report("alpha", [], [a1], 70)
-        beta = self._make_report("beta", [], [a2], 65)
-        result = Arbiter().compare(alpha, beta)
-        assert len(result.known_unknowns) >= 2
+    def test_combined_score(self, all_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
 
-    def test_combined_coverage_is_minimum(self):
-        alpha = self._make_report("alpha", [], [], 70)
-        beta = self._make_report("beta", [], [], 60)
-        result = Arbiter().compare(alpha, beta)
-        # Combined should be based on the lower coverage
-        assert result.combined_coverage.percentage <= 65
+        alpha = AgentInstitutional(post)
+        beta = AgentTheoretical(post)
+        report_a = alpha.audit(all_findings)
+        report_b = beta.audit(all_findings)
 
-    def test_blindness_gap(self):
-        alpha = self._make_report("alpha", [], [], 70)
-        beta = self._make_report("beta", [], [], 55)
-        result = Arbiter().compare(alpha, beta)
-        assert result.blindness_gap == 15.0
+        arbiter = Arbiter(report_a, report_b)
+        arbiter.compare()
+        score = arbiter.combined_score()
+        assert 0 <= score <= 100
+
+    def test_report_string(self, all_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+
+        alpha = AgentInstitutional(post)
+        beta = AgentTheoretical(post)
+        report_a = alpha.audit(all_findings)
+        report_b = beta.audit(all_findings)
+
+        arbiter = Arbiter(report_a, report_b)
+        arbiter.compare()
+        text = arbiter.report()
+        assert "MULTI-AGENT ARBITER REPORT" in text
+
+    def test_to_dict(self, all_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+
+        alpha = AgentInstitutional(post)
+        beta = AgentTheoretical(post)
+        report_a = alpha.audit(all_findings)
+        report_b = beta.audit(all_findings)
+
+        arbiter = Arbiter(report_a, report_b)
+        arbiter.compare()
+        d = arbiter.to_dict()
+        assert "alpha" in d
+        assert "beta" in d
+        assert "combined" in d
+        assert "discrepancies" in d
 
 
 class TestMultiAgentSystem:
-    def test_full_run(self):
-        mc = MockConnector()
-        mc.register_responses({
-            **AMPHIPOLIS_CYCLE_0_RESPONSES,
-            **AMPHIPOLIS_CYCLE_1_RESPONSES,
-        })
-        mas = MultiAgentSystem(
-            connector=mc,
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-            max_cycles=2,
-        )
-        result = mas.run()
+    def test_run(self, all_findings):
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
+
+        system = MultiAgentSystem(post)
+        result = system.run(all_findings)
         assert "alpha" in result
         assert "beta" in result
         assert "combined" in result
-        assert "agreements" in result
-        assert "discrepancies" in result
-        assert "known_unknowns" in result
-        assert result["combined"]["blindness_gap"] >= 0

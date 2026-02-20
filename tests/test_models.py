@@ -2,175 +2,149 @@
 
 from epistemix.models import (
     Anomaly,
-    AnomalyType,
-    CoverageScore,
+    CycleSnapshot,
+    Entity,
+    EntityType,
+    Expectation,
     Finding,
-    FindingType,
-    Postulate,
-    PostulateStatus,
-    QueryLanguage,
-    ResearchState,
+    GapType,
+    SearchQuery,
     Severity,
 )
 
 
 class TestSeverity:
     def test_ordering(self):
-        assert Severity.CRITICAL < Severity.HIGH
-        assert Severity.HIGH < Severity.MEDIUM
-        assert Severity.CRITICAL < Severity.MEDIUM
+        assert Severity.LOW < Severity.MEDIUM
+        assert Severity.MEDIUM < Severity.HIGH
+        assert Severity.HIGH < Severity.CRITICAL
 
-    def test_equality(self):
-        assert Severity.CRITICAL <= Severity.CRITICAL
-        assert not Severity.HIGH < Severity.HIGH
+    def test_weight(self):
+        assert Severity.LOW.weight == 1
+        assert Severity.CRITICAL.weight == 5
+
+    def test_le(self):
+        assert Severity.HIGH <= Severity.HIGH
+        assert Severity.MEDIUM <= Severity.HIGH
+
+
+class TestEntity:
+    def test_hash_case_insensitive(self):
+        a = Entity(name="Alice", entity_type=EntityType.SCHOLAR)
+        b = Entity(name="alice", entity_type=EntityType.SCHOLAR)
+        assert a == b
+        assert hash(a) == hash(b)
+
+    def test_to_dict(self):
+        e = Entity(
+            name="Bob", entity_type=EntityType.INSTITUTION,
+            times_mentioned=3, investigated=True,
+        )
+        d = e.to_dict()
+        assert d["name"] == "Bob"
+        assert d["entity_type"] == "institution"
+        assert d["times_mentioned"] == 3
+
+
+class TestExpectation:
+    def test_satisfy(self):
+        exp = Expectation(
+            description="Test",
+            gap_type=GapType.LINGUISTIC,
+            severity_if_unmet=Severity.HIGH,
+        )
+        assert not exp.met
+        exp.satisfy("found it")
+        assert exp.met
+        assert exp.evidence == "found it"
+
+    def test_to_dict(self):
+        exp = Expectation(
+            description="Test",
+            gap_type=GapType.TEMPORAL,
+            severity_if_unmet=Severity.MEDIUM,
+            met=True,
+            evidence="2024",
+        )
+        d = exp.to_dict()
+        assert d["gap_type"] == "temporal"
+        assert d["met"] is True
 
 
 class TestFinding:
-    def test_dedup_by_name_and_type(self):
-        f1 = Finding(name="Katerina Peristeri", finding_type=FindingType.SCHOLAR)
-        f2 = Finding(name="katerina peristeri", finding_type=FindingType.SCHOLAR)
-        assert f1 == f2
-        assert hash(f1) == hash(f2)
+    def test_dedup_same_source_and_language(self):
+        a = Finding(source="Paper A", language="en")
+        b = Finding(source="paper a", language="en", author="Alice")
+        assert a == b
 
-    def test_different_type_not_equal(self):
-        f1 = Finding(name="Amphipolis", finding_type=FindingType.EVIDENCE)
-        f2 = Finding(name="Amphipolis", finding_type=FindingType.INSTITUTION)
-        assert f1 != f2
+    def test_different_language_not_equal(self):
+        a = Finding(source="Paper A", language="en")
+        b = Finding(source="Paper A", language="fr")
+        assert a != b
 
-    def test_strip_whitespace(self):
-        f1 = Finding(name="  Peristeri  ", finding_type=FindingType.SCHOLAR)
-        f2 = Finding(name="Peristeri", finding_type=FindingType.SCHOLAR)
-        assert f1 == f2
+    def test_to_dict(self):
+        f = Finding(
+            source="Test", language="en",
+            author="Alice", institution="MIT",
+            theory_supported="Theory X", year=2024,
+        )
+        d = f.to_dict()
+        assert d["author"] == "Alice"
+        assert d["year"] == 2024
 
-    def test_set_dedup(self):
-        f1 = Finding(name="Peristeri", finding_type=FindingType.SCHOLAR)
-        f2 = Finding(name="peristeri", finding_type=FindingType.SCHOLAR)
-        f3 = Finding(name="Lefantzis", finding_type=FindingType.SCHOLAR)
-        assert len({f1, f2, f3}) == 2
-
-
-class TestPostulate:
-    def test_confirm(self):
-        p = Postulate(id="P-01", description="test", meta_axiom_id="MA-01")
-        assert p.status == PostulateStatus.UNCONFIRMED
-        p.confirm("Peristeri")
-        assert p.status == PostulateStatus.CONFIRMED
-        assert "Peristeri" in p.confirming_findings
-
-    def test_confirm_idempotent(self):
-        p = Postulate(id="P-01", description="test", meta_axiom_id="MA-01")
-        p.confirm("Peristeri")
-        p.confirm("Peristeri")
-        assert p.confirming_findings.count("Peristeri") == 1
-
-    def test_refute(self):
-        p = Postulate(id="P-01", description="test", meta_axiom_id="MA-01")
-        p.refute("insufficient evidence")
-        assert p.status == PostulateStatus.REFUTED
+    def test_repr(self):
+        f = Finding(source="Paper", language="en", year=2024)
+        assert "[en]" in repr(f)
+        assert "2024" in repr(f)
 
 
 class TestAnomaly:
-    def test_dedup(self):
-        a1 = Anomaly(
-            id="A-01",
-            anomaly_type=AnomalyType.LANGUAGE_GAP,
-            severity=Severity.HIGH,
-            description="No Greek sources found",
-        )
-        a2 = Anomaly(
-            id="A-02",
-            anomaly_type=AnomalyType.LANGUAGE_GAP,
-            severity=Severity.MEDIUM,
-            description="no greek sources found",
-        )
-        assert a1 == a2
-        assert len({a1, a2}) == 1
-
-    def test_different_type_not_equal(self):
-        a1 = Anomaly(
-            id="A-01",
-            anomaly_type=AnomalyType.LANGUAGE_GAP,
-            severity=Severity.HIGH,
-            description="Gap found",
-        )
-        a2 = Anomaly(
-            id="A-02",
-            anomaly_type=AnomalyType.THEORY_GAP,
-            severity=Severity.HIGH,
-            description="Gap found",
-        )
-        assert a1 != a2
-
-
-class TestCoverageScore:
-    def test_percentage(self):
-        cs = CoverageScore(confirmed=5, total=10)
-        assert cs.percentage == 50.0
-
-    def test_zero_total(self):
-        cs = CoverageScore(confirmed=0, total=0)
-        assert cs.percentage == 0.0
-
-    def test_repr(self):
-        cs = CoverageScore(confirmed=3, total=8, anomaly_count=2, cycle=1)
-        assert "37.5%" in repr(cs)
-        assert "cycle=1" in repr(cs)
-
-
-class TestResearchState:
-    def test_add_finding_new(self, amphipolis_state):
-        f = Finding(name="Peristeri", finding_type=FindingType.SCHOLAR)
-        assert amphipolis_state.add_finding(f) is True
-        assert len(amphipolis_state.findings) == 1
-
-    def test_add_finding_duplicate(self, amphipolis_state):
-        f1 = Finding(name="Peristeri", finding_type=FindingType.SCHOLAR)
-        f2 = Finding(name="peristeri", finding_type=FindingType.SCHOLAR)
-        amphipolis_state.add_finding(f1)
-        assert amphipolis_state.add_finding(f2) is False
-        assert len(amphipolis_state.findings) == 1
-
-    def test_add_anomaly_new(self, amphipolis_state):
+    def test_dedup_same_type_and_description(self):
         a = Anomaly(
-            id="A-01",
-            anomaly_type=AnomalyType.LANGUAGE_GAP,
+            description="Missing language", gap_type=GapType.LINGUISTIC,
             severity=Severity.HIGH,
-            description="No Greek sources",
         )
-        assert amphipolis_state.add_anomaly(a) is True
-
-    def test_add_anomaly_duplicate(self, amphipolis_state):
-        a1 = Anomaly(
-            id="A-01",
-            anomaly_type=AnomalyType.LANGUAGE_GAP,
-            severity=Severity.HIGH,
-            description="No Greek sources",
-        )
-        a2 = Anomaly(
-            id="A-02",
-            anomaly_type=AnomalyType.LANGUAGE_GAP,
+        b = Anomaly(
+            description="missing language", gap_type=GapType.LINGUISTIC,
             severity=Severity.MEDIUM,
-            description="no greek sources",
         )
-        amphipolis_state.add_anomaly(a1)
-        assert amphipolis_state.add_anomaly(a2) is False
+        assert a == b
 
-    def test_unique_findings(self, amphipolis_state, sample_findings):
-        for f in sample_findings:
-            amphipolis_state.add_finding(f)
-        assert len(amphipolis_state.unique_findings) == len(sample_findings)
+    def test_different_gap_type_not_equal(self):
+        a = Anomaly(description="X", gap_type=GapType.LINGUISTIC, severity=Severity.HIGH)
+        b = Anomaly(description="X", gap_type=GapType.TEMPORAL, severity=Severity.HIGH)
+        assert a != b
 
-    def test_current_coverage(self, amphipolis_state, sample_postulates):
-        amphipolis_state.postulates = sample_postulates
-        sample_postulates[0].confirm("test")
-        sample_postulates[1].confirm("test")
-        cov = amphipolis_state.current_coverage()
-        assert cov.confirmed == 2
-        assert cov.total == 5
-        assert cov.percentage == 40.0
+    def test_to_dict(self):
+        a = Anomaly(
+            description="Test", gap_type=GapType.VOICE,
+            severity=Severity.CRITICAL, recommendation="Investigate",
+        )
+        d = a.to_dict()
+        assert d["severity"] == "critical"
+        assert d["recommendation"] == "Investigate"
 
-    def test_to_dict(self, amphipolis_state):
-        result = amphipolis_state.to_dict()
-        assert result["topic"] == "Amphipolis tomb excavation"
-        assert result["country"] == "Greece"
-        assert "coverage_percentage" in result
+
+class TestSearchQuery:
+    def test_to_dict(self):
+        q = SearchQuery(
+            query="test", language="en",
+            priority=Severity.HIGH, target_gap=GapType.LINGUISTIC,
+        )
+        d = q.to_dict()
+        assert d["priority"] == "high"
+        assert d["target_gap"] == "linguistic"
+
+
+class TestCycleSnapshot:
+    def test_to_dict(self):
+        snap = CycleSnapshot(
+            cycle=1, n_postulate_scholars=5, n_postulate_theories=2,
+            n_postulate_institutions=3, n_expectations=10,
+            n_expectations_met=7, n_findings=15, n_anomalies=4,
+            coverage_score=65.3,
+        )
+        d = snap.to_dict()
+        assert d["cycle"] == 1
+        assert d["percentage"] == 65.3
+        assert d["confirmed"] == 7

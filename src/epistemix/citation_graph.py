@@ -1,184 +1,240 @@
 """Citation graph analysis — detect schools, islands, and priority rankings.
 
-Uses a directed adjacency list (no external dependencies).
-A "school" is a cluster of mutually citing researchers.
-A "citation island" is a scholar frequently cited but never directly searched.
+Based on the founder's v2 design with:
+  - ScholarNode with investigation status and priority scoring
+  - Union-find school detection (mutual citation = same school)
+  - Non-scholar entity filtering
+  - Priority-ranked uninvestigated entities
+
+No external dependencies (uses stdlib only).
 """
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
 from dataclasses import dataclass, field
+from typing import Any
 
-from epistemix.models import (
-    Anomaly,
-    AnomalyType,
-    Finding,
-    FindingType,
-    Severity,
-)
+from epistemix.models import Anomaly, Finding, GapType, Severity
+
+
+# ============================================================
+# DATA STRUCTURES
+# ============================================================
+
+@dataclass
+class CitationEdge:
+    """A citation link: source cites target."""
+    source: str
+    target: str
+    source_language: str = ""
 
 
 @dataclass
+class ScholarNode:
+    """A node in the citation graph."""
+    name: str
+    in_degree: int = 0
+    out_degree: int = 0
+    investigated: bool = False
+    languages_seen_in: set = field(default_factory=set)
+
+    @property
+    def priority(self) -> float:
+        """Higher = more important to investigate."""
+        if self.investigated:
+            return 0.0
+        return self.in_degree / (self.out_degree + 1)
+
+
+@dataclass
+class AcademicSchool:
+    """A cluster of mutually-citing researchers."""
+    members: list[str] = field(default_factory=list)
+    size: int = 0
+
+
+# ============================================================
+# CITATION GRAPH
+# ============================================================
+
 class CitationGraph:
-    """Directed citation graph built from findings."""
+    """Directed citation graph with school detection and priority ranking.
 
-    # node → set of nodes it cites
-    _adjacency: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
-    # node → set of nodes that cite it
-    _reverse: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
-    # names of scholars discovered via direct search queries
-    _searched: set[str] = field(default_factory=set)
+    Schools are detected via mutual citation (A cites B AND B cites A)
+    using a union-find algorithm — more accurate than simple connected
+    components.
+    """
 
-    def add_finding(self, finding: Finding) -> None:
-        """Register a finding and its citations in the graph."""
-        name = finding.name.lower().strip()
-        # Ensure node exists even without edges
-        if name not in self._adjacency:
-            self._adjacency[name] = set()
+    def __init__(self) -> None:
+        self.nodes: dict[str, ScholarNode] = {}
+        self.edges: list[CitationEdge] = []
+        self._adjacency: dict[str, set[str]] = {}
+        self._reverse: dict[str, set[str]] = {}
+        self._non_scholars: set[str] = set()
 
-        if finding.source_query:
-            self._searched.add(name)
+    def register_non_scholars(self, names: set[str]) -> None:
+        """Register names that should not be treated as scholars."""
+        self._non_scholars = {n.lower() for n in names}
 
-        for cited in finding.citations:
-            cited_norm = cited.lower().strip()
-            self._adjacency[name].add(cited_norm)
-            self._reverse[cited_norm].add(name)
-            # Ensure cited node exists
-            if cited_norm not in self._adjacency:
-                self._adjacency[cited_norm] = set()
-
-    @property
-    def nodes(self) -> set[str]:
-        return set(self._adjacency.keys())
-
-    @property
-    def node_count(self) -> int:
-        return len(self._adjacency)
-
-    def in_degree(self, node: str) -> int:
-        return len(self._reverse.get(node.lower().strip(), set()))
-
-    def out_degree(self, node: str) -> int:
-        return len(self._adjacency.get(node.lower().strip(), set()))
-
-    def detect_schools(self) -> list[set[str]]:
-        """Find citation clusters via connected components on the undirected projection.
-
-        A school is a group of scholars who cite each other. We build an
-        undirected graph (A↔B if A cites B or B cites A) and find connected
-        components using BFS.
-        """
-        # Build undirected adjacency
-        undirected: dict[str, set[str]] = defaultdict(set)
-        for node, cited_set in self._adjacency.items():
-            for cited in cited_set:
-                undirected[node].add(cited)
-                undirected[cited].add(node)
-
-        visited: set[str] = set()
-        schools: list[set[str]] = []
-
-        for node in undirected:
-            if node in visited:
+    def build_from_findings(self, findings: list[Finding]) -> None:
+        """Build graph from a list of findings."""
+        for finding in findings:
+            author = finding.author.lower().strip() if finding.author else ""
+            if not author or author in self._non_scholars:
                 continue
-            # BFS
-            component: set[str] = set()
-            queue = deque([node])
-            while queue:
-                current = queue.popleft()
-                if current in visited:
+
+            # Ensure author node exists
+            if author not in self.nodes:
+                self.nodes[author] = ScholarNode(
+                    name=finding.author,
+                    investigated=True,  # We have their publication
+                    languages_seen_in={finding.language},
+                )
+            else:
+                self.nodes[author].investigated = True
+                self.nodes[author].languages_seen_in.add(finding.language)
+
+            # Process mentioned entities as citation targets
+            for mentioned in finding.entities_mentioned:
+                target = mentioned.lower().strip()
+                if target in self._non_scholars or target == author:
                     continue
-                visited.add(current)
-                component.add(current)
-                for neighbor in undirected[current]:
-                    if neighbor not in visited:
-                        queue.append(neighbor)
-            if len(component) >= 2:
-                schools.append(component)
 
-        return schools
+                # Ensure target node exists
+                if target not in self.nodes:
+                    self.nodes[target] = ScholarNode(
+                        name=mentioned,
+                        languages_seen_in={finding.language},
+                    )
+                else:
+                    self.nodes[target].languages_seen_in.add(finding.language)
 
-    def check_single_school(self) -> Anomaly | None:
-        """Return a CRITICAL anomaly if only one citation school exists."""
-        schools = self.detect_schools()
-        if len(schools) == 1:
-            return Anomaly(
-                id="A-CG-single-school",
-                anomaly_type=AnomalyType.SCHOOL_GAP,
-                severity=Severity.CRITICAL,
-                description=(
-                    f"Only one citation school detected ({len(schools[0])} scholars). "
-                    "This suggests the search has not yet reached beyond a single "
-                    "research community."
-                ),
-                suggested_queries=[
-                    "alternative research groups",
-                    "competing interpretations",
-                ],
-            )
-        return None
+                # Add edge
+                self.edges.append(CitationEdge(
+                    source=author, target=target,
+                    source_language=finding.language,
+                ))
 
-    def find_citation_islands(self, min_citations: int = 2) -> list[dict[str, int | str]]:
-        """Find scholars cited by others but never directly searched.
+                # Update degrees
+                self.nodes[author].out_degree += 1
+                self.nodes[target].in_degree += 1
 
-        A citation island is someone who appears in citations but was not
-        found via any direct search query — a potential blind spot.
+                # Update adjacency
+                self._adjacency.setdefault(author, set()).add(target)
+                self._reverse.setdefault(target, set()).add(author)
+
+    def detect_schools(self) -> list[AcademicSchool]:
+        """Detect academic schools using union-find on mutual citations.
+
+        A mutual citation means A cites B AND B cites A.
         """
-        islands = []
-        for node in self.nodes:
-            in_deg = self.in_degree(node)
-            if in_deg >= min_citations and node not in self._searched:
-                islands.append({
-                    "name": node,
-                    "in_citations": in_deg,
-                    "direct_searches": 0,
-                })
-        return sorted(islands, key=lambda x: x["in_citations"], reverse=True)
+        # Union-find
+        parent: dict[str, str] = {}
 
-    def investigation_priority_ranking(self) -> list[dict[str, float | str]]:
-        """Rank all nodes by investigation priority.
+        def find(x: str) -> str:
+            if x not in parent:
+                parent[x] = x
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
 
-        Priority = in_citations / (direct_searches + 1)
-        High priority = cited often but rarely searched directly.
-        """
-        rankings = []
-        for node in self.nodes:
-            in_deg = self.in_degree(node)
-            direct = 1 if node in self._searched else 0
-            priority = in_deg / (direct + 1)
-            rankings.append({
-                "name": node,
-                "in_citations": in_deg,
-                "direct_searches": direct,
-                "priority": round(priority, 2),
-            })
-        return sorted(rankings, key=lambda x: x["priority"], reverse=True)
+        def union(a: str, b: str) -> None:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+
+        # Initialize all nodes
+        for name in self.nodes:
+            parent[name] = name
+
+        # Union mutually-citing pairs
+        for source, targets in self._adjacency.items():
+            for target in targets:
+                if target in self._adjacency and source in self._adjacency[target]:
+                    union(source, target)
+
+        # Group by root
+        groups: dict[str, list[str]] = {}
+        for name in self.nodes:
+            root = find(name)
+            groups.setdefault(root, []).append(name)
+
+        schools = []
+        for members in groups.values():
+            if len(members) >= 2:
+                schools.append(AcademicSchool(
+                    members=sorted(members),
+                    size=len(members),
+                ))
+
+        return sorted(schools, key=lambda s: -s.size)
+
+    def detect_isolated_scholars(self) -> list[ScholarNode]:
+        """Find scholars with high in-degree but not investigated."""
+        return [
+            node for node in self.nodes.values()
+            if not node.investigated and node.in_degree >= 2
+        ]
+
+    def get_priority_uninvestigated(self, limit: int = 10) -> list[ScholarNode]:
+        """Top uninvestigated scholars ranked by priority."""
+        uninvestigated = [
+            n for n in self.nodes.values() if not n.investigated
+        ]
+        return sorted(
+            uninvestigated, key=lambda n: -n.priority
+        )[:limit]
 
     def generate_anomalies(self) -> list[Anomaly]:
-        """Generate all citation-graph-based anomalies."""
-        anomalies = []
+        """Generate anomalies from the citation graph."""
+        anomalies: list[Anomaly] = []
 
-        # Check single school
-        single_school = self.check_single_school()
-        if single_school:
-            anomalies.append(single_school)
+        # High-priority uninvestigated scholars
+        priority = self.get_priority_uninvestigated(5)
+        for node in priority:
+            if node.in_degree >= 3:
+                anomalies.append(Anomaly(
+                    description=(
+                        f"Scholar '{node.name}' cited {node.in_degree}x "
+                        f"but never investigated"
+                    ),
+                    gap_type=GapType.CITATION_ISLAND,
+                    severity=Severity.HIGH,
+                    recommendation=f"Search for publications by {node.name}",
+                    suggested_queries=[
+                        f"{node.name} publications research",
+                        f"{node.name} academic paper",
+                    ],
+                ))
 
-        # Check citation islands
-        islands = self.find_citation_islands()
-        for island in islands:
+        # School imbalance
+        schools = self.detect_schools()
+        if len(schools) == 1 and schools[0].size >= 3:
             anomalies.append(Anomaly(
-                id=f"A-CG-island-{island['name'][:20]}",
-                anomaly_type=AnomalyType.CITATION_ISLAND,
-                severity=Severity.HIGH,
                 description=(
-                    f"Scholar '{island['name']}' is cited {island['in_citations']} times "
-                    "but was never directly searched — potential blind spot."
+                    f"Only one citation school detected "
+                    f"({schools[0].size} members). "
+                    "Possible echo chamber."
                 ),
-                suggested_queries=[
-                    f"{island['name']} publications",
-                    f"{island['name']} research contributions",
-                ],
+                gap_type=GapType.SCHOOL_GAP,
+                severity=Severity.CRITICAL,
+                recommendation="Search for alternative research groups",
             ))
 
         return anomalies
+
+    def summary(self) -> dict[str, Any]:
+        """Summary statistics."""
+        schools = self.detect_schools()
+        isolated = self.detect_isolated_scholars()
+        return {
+            "total_nodes": len(self.nodes),
+            "total_edges": len(self.edges),
+            "schools": len(schools),
+            "school_sizes": [s.size for s in schools],
+            "isolated_scholars": len(isolated),
+            "uninvestigated": len([
+                n for n in self.nodes.values() if not n.investigated
+            ]),
+        }

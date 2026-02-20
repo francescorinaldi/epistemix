@@ -1,607 +1,1000 @@
-"""Core epistemic audit engine — the heart of Epistemix.
+"""EPISTEMIX v2 — Dynamic Epistemic Engine.
 
-Orchestrates postulate generation, query construction, result ingestion,
-coverage calculation, anomaly detection, and cycle management.
+Core engine with dynamic postulates, multilingual query generation,
+expectation derivation, satisfaction checking, and audit.
+
+Architecture:
+  Seed Input → Query Gen → Findings → Ingester → Inference →
+  Auditor → New Queries → (loop)
+
+Based on the founder's v2 design. Postulates are DYNAMIC: they grow
+as findings are ingested. Every new scholar, institution, or theory
+mentioned in a finding becomes a new postulate.
+
+Classes:
+  DynamicPostulates      — manages entity/theory/language tracking
+  MultilingualQueryGenerator — generates seed and gap-filling queries
+  DynamicInferenceEngine — derives expectations from current state
+  ExpectationSatisfier   — checks which expectations are met
+  AuditEngine            — detects unmet expectations and anomalies
+  EpistemixEngine         — the main orchestrator
 """
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
 from typing import Any
 
-from epistemix.citation_graph import CitationGraph
-from epistemix.connector import BaseConnector, ConnectorResponse, extract_json
-from epistemix.content_analysis import ContentAnalysisEngine
-from epistemix.disciplines import DisciplineExpectations
-from epistemix.meta_axioms import META_AXIOMS, generate_postulate_descriptions
 from epistemix.models import (
     Anomaly,
-    AnomalyType,
-    CoverageScore,
+    CycleSnapshot,
+    Entity,
+    EntityType,
+    Expectation,
     Finding,
-    FindingType,
-    Postulate,
-    PostulateStatus,
-    Query,
-    QueryLanguage,
-    ResearchState,
+    GapType,
+    SearchQuery,
     Severity,
+)
+from epistemix.knowledge import (
+    GEOGRAPHIC_LINGUISTIC,
+    KNOWN_TRANSLITERATIONS,
+    STOPWORDS,
+    TRANSLITERATIONS,
+    classify_entity_name,
 )
 
 
-# ---------------------------------------------------------------------------
-# Language support
-# ---------------------------------------------------------------------------
+# ============================================================
+# DYNAMIC POSTULATES
+# ============================================================
 
-COUNTRY_LANGUAGES: dict[str, list[QueryLanguage]] = {
-    "greece": [QueryLanguage.GREEK, QueryLanguage.ENGLISH],
-    "italy": [QueryLanguage.ITALIAN, QueryLanguage.ENGLISH],
-    "france": [QueryLanguage.FRENCH, QueryLanguage.ENGLISH],
-    "germany": [QueryLanguage.GERMAN, QueryLanguage.ENGLISH],
-    "turkey": [QueryLanguage.TURKISH, QueryLanguage.ENGLISH],
-    "egypt": [QueryLanguage.ARABIC, QueryLanguage.ENGLISH],
-    "spain": [QueryLanguage.SPANISH, QueryLanguage.ENGLISH],
-    "china": [QueryLanguage.CHINESE, QueryLanguage.ENGLISH],
-    "japan": [QueryLanguage.JAPANESE, QueryLanguage.ENGLISH],
-}
+class DynamicPostulates:
+    """Postulates that grow as research progresses.
 
-# Pre-built archaeology term translations (extensible per domain)
-TERM_TRANSLATIONS: dict[str, dict[QueryLanguage, str]] = {
-    "excavation": {
-        QueryLanguage.GREEK: "ανασκαφή",
-        QueryLanguage.FRENCH: "fouilles",
-        QueryLanguage.GERMAN: "Ausgrabung",
-        QueryLanguage.ITALIAN: "scavo",
-        QueryLanguage.TURKISH: "kazı",
-        QueryLanguage.SPANISH: "excavación",
-    },
-    "tomb": {
-        QueryLanguage.GREEK: "τάφος",
-        QueryLanguage.FRENCH: "tombeau",
-        QueryLanguage.GERMAN: "Grab",
-        QueryLanguage.ITALIAN: "tomba",
-        QueryLanguage.TURKISH: "mezar",
-        QueryLanguage.SPANISH: "tumba",
-    },
-    "archaeology": {
-        QueryLanguage.GREEK: "αρχαιολογία",
-        QueryLanguage.FRENCH: "archéologie",
-        QueryLanguage.GERMAN: "Archäologie",
-        QueryLanguage.ITALIAN: "archeologia",
-        QueryLanguage.TURKISH: "arkeoloji",
-        QueryLanguage.SPANISH: "arqueología",
-    },
-    "ancient": {
-        QueryLanguage.GREEK: "αρχαίος",
-        QueryLanguage.FRENCH: "ancien",
-        QueryLanguage.GERMAN: "antik",
-        QueryLanguage.ITALIAN: "antico",
-        QueryLanguage.TURKISH: "antik",
-        QueryLanguage.SPANISH: "antiguo",
-    },
-    "research": {
-        QueryLanguage.GREEK: "έρευνα",
-        QueryLanguage.FRENCH: "recherche",
-        QueryLanguage.GERMAN: "Forschung",
-        QueryLanguage.ITALIAN: "ricerca",
-        QueryLanguage.TURKISH: "araştırma",
-        QueryLanguage.SPANISH: "investigación",
-    },
-    "scholar": {
-        QueryLanguage.GREEK: "ερευνητής",
-        QueryLanguage.FRENCH: "chercheur",
-        QueryLanguage.GERMAN: "Forscher",
-        QueryLanguage.ITALIAN: "ricercatore",
-        QueryLanguage.TURKISH: "araştırmacı",
-        QueryLanguage.SPANISH: "investigador",
-    },
-}
-
-
-def translate_query(text: str, target_lang: QueryLanguage) -> str:
-    """Translate key terms in a query to the target language."""
-    if target_lang == QueryLanguage.ENGLISH:
-        return text
-    result = text.lower()
-    for english_term, translations in TERM_TRANSLATIONS.items():
-        if target_lang in translations:
-            result = result.replace(english_term, translations[target_lang])
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Entity extraction from text
-# ---------------------------------------------------------------------------
-
-# Patterns for extracting structured entities from text responses
-SCHOLAR_PATTERNS = [
-    r"(?:Dr\.?|Prof\.?|Professor)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
-    r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+(?:discovered|excavated|studied|published|argued|proposed|suggested|led|directed)",
-    r"(?:researcher|archaeologist|scholar|historian|scientist|specialist)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
-    r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+(?:\((?:\d{4}|et al))",
-]
-
-INSTITUTION_PATTERNS = [
-    r"((?:University|Institute|Museum|Ministry|Academy|Center|Centre|School|Department)\s+(?:of\s+)?[A-Z][a-zA-Z\s]+?)(?:\.|,|\)|\s{2})",
-    r"([A-Z][a-zA-Z]+\s+(?:University|Institute|Museum|Academy))",
-    r"(Hellenic\s+Ministry\s+of\s+\w+)",
-]
-
-THEORY_PATTERNS = [
-    r"(?:theory|hypothesis|interpretation)\s+(?:that|of)\s+(.+?)(?:\.|,|;)",
-    r"(.+?)\s+(?:theory|hypothesis)",
-]
-
-
-def extract_entities(text: str, source_query: str = "") -> list[Finding]:
-    """Extract named entities from a text response."""
-    findings: list[Finding] = []
-    seen: set[str] = set()
-
-    # Extract scholars
-    for pattern in SCHOLAR_PATTERNS:
-        for match in re.finditer(pattern, text):
-            name = match.group(1).strip()
-            if len(name) > 5 and name.lower() not in seen:
-                seen.add(name.lower())
-                findings.append(Finding(
-                    name=name,
-                    finding_type=FindingType.SCHOLAR,
-                    source_query=source_query,
-                ))
-
-    # Extract institutions
-    for pattern in INSTITUTION_PATTERNS:
-        for match in re.finditer(pattern, text):
-            name = match.group(1).strip()
-            if len(name) > 5 and name.lower() not in seen:
-                seen.add(name.lower())
-                findings.append(Finding(
-                    name=name,
-                    finding_type=FindingType.INSTITUTION,
-                    source_query=source_query,
-                ))
-
-    # Extract theories
-    for pattern in THEORY_PATTERNS:
-        for match in re.finditer(pattern, text, re.IGNORECASE):
-            name = match.group(1).strip()
-            if 10 < len(name) < 100 and name.lower() not in seen:
-                seen.add(name.lower())
-                findings.append(Finding(
-                    name=name,
-                    finding_type=FindingType.THEORY,
-                    source_query=source_query,
-                ))
-
-    return findings
-
-
-# ---------------------------------------------------------------------------
-# EpistemicEngine
-# ---------------------------------------------------------------------------
-
-@dataclass
-class EpistemicEngine:
-    """The main epistemic audit engine.
-
-    Orchestrates the full audit cycle:
-    1. Initialize postulates from meta-axioms
-    2. Generate queries (multilingual)
-    3. Execute queries via connector
-    4. Ingest results → extract entities → deduplicate
-    5. Update postulates based on findings
-    6. Detect anomalies
-    7. Calculate coverage
-    8. Repeat until convergence or max cycles
+    Starts with minimal seed info; expands with each finding.
+    Tracks entities (scholars, institutions, theories) discovered
+    so far and their investigation status.
     """
 
-    connector: BaseConnector
-    state: ResearchState
-    citation_graph: CitationGraph = field(default_factory=CitationGraph)
-    discipline_expectations: DisciplineExpectations = field(
-        default_factory=DisciplineExpectations
-    )
-    content_analysis: ContentAnalysisEngine = field(
-        default_factory=ContentAnalysisEngine
-    )
-    verbose: bool = False
+    def __init__(self, country: str, topic: str, discipline: str = "") -> None:
+        self.country = country
+        self.topic = topic
+        self.discipline = discipline
+        self.discovery_year: int = 0
+        self.ongoing: bool = True
 
-    def initialize_postulates(self) -> list[Postulate]:
-        """Generate initial postulates from meta-axioms for this topic/country/discipline."""
-        descriptions = generate_postulate_descriptions(
-            self.state.topic,
-            self.state.country,
-            self.state.discipline,
-        )
-        postulates = []
-        for i, (axiom_id, desc) in enumerate(descriptions):
-            p = Postulate(
-                id=f"P-{axiom_id}-{i:02d}",
-                description=desc,
-                meta_axiom_id=axiom_id,
-                generated_at_cycle=0,
+        # These grow dynamically
+        self.entities: dict[str, Entity] = {}
+        self.theories: list[str] = []
+        self.languages_covered: set[str] = set()
+        self.institutions: set[str] = set()
+        self.scholars: set[str] = set()
+
+        # Track evolution
+        self.history: list[dict] = []
+
+    def ingest_finding(self, finding: Finding) -> list[str]:
+        """Process a finding: extract entities, update postulates.
+        Returns list of NEW entity names discovered.
+        """
+        new_entities: list[str] = []
+
+        # Track language
+        self.languages_covered.add(finding.language)
+
+        # Process author
+        if finding.author:
+            canonical_author = KNOWN_TRANSLITERATIONS.get(
+                finding.author.lower(), finding.author
             )
-            postulates.append(p)
+            if self._register_entity(
+                finding.author, EntityType.SCHOLAR,
+                finding.source, finding.language,
+                institution=finding.institution,
+            ):
+                new_entities.append(finding.author)
+            # Mark as investigated (we have their publication)
+            key = canonical_author.lower()
+            if key in self.entities:
+                self.entities[key].investigated = True
+            self.scholars.add(canonical_author)
 
-        self.state.postulates = postulates
-        return postulates
+        # Process institution
+        if finding.institution:
+            if self._register_entity(
+                finding.institution, EntityType.INSTITUTION,
+                finding.source, finding.language,
+            ):
+                new_entities.append(finding.institution)
+            self.institutions.add(finding.institution)
 
-    def generate_initial_queries(self) -> list[Query]:
-        """Generate multilingual queries for the initial cycle."""
-        topic = self.state.topic
-        country = self.state.country
-        discipline = self.state.discipline
+        # Process theory
+        if (
+            finding.theory_supported
+            and finding.theory_supported not in self.theories
+        ):
+            self.theories.append(finding.theory_supported)
 
-        queries = []
+        # Process mentioned entities
+        for name in finding.entities_mentioned:
+            entity_type_str = classify_entity_name(name)
+            entity_type = EntityType(entity_type_str)
+            if self._register_entity(
+                name, entity_type,
+                finding.source, finding.language,
+            ):
+                new_entities.append(name)
+            else:
+                # Already known — increment mention count
+                key = KNOWN_TRANSLITERATIONS.get(
+                    name.lower(), name
+                ).lower()
+                if key in self.entities:
+                    self.entities[key].times_mentioned += 1
+                    self.entities[key].languages_seen_in.add(finding.language)
 
-        # English base queries
-        base_queries = [
-            f"{topic} {country} {discipline} key researchers",
-            f"{topic} {country} theories interpretations",
-            f"{topic} {country} institutions involved",
-            f"{topic} {country} publications review",
-            f"{topic} {country} recent discoveries",
+        return new_entities
+
+    def _register_entity(
+        self,
+        name: str,
+        entity_type: EntityType,
+        source: str,
+        language: str,
+        institution: str = "",
+    ) -> bool:
+        """Register entity if new. Returns True if new."""
+        canonical = KNOWN_TRANSLITERATIONS.get(name.lower(), name)
+        key = canonical.lower()
+
+        if key in self.entities:
+            self.entities[key].times_mentioned += 1
+            self.entities[key].languages_seen_in.add(language)
+            return False
+
+        self.entities[key] = Entity(
+            name=canonical,
+            entity_type=entity_type,
+            first_seen_in=source,
+            times_mentioned=1,
+            investigated=False,
+            languages_seen_in={language},
+            affiliated_institution=institution,
+        )
+        return True
+
+    def get_uninvestigated_scholars(self) -> list[Entity]:
+        """Scholars mentioned but not yet investigated (no publication found)."""
+        return [
+            e for e in self.entities.values()
+            if e.entity_type == EntityType.SCHOLAR
+            and not e.investigated
+            and e.times_mentioned >= 1
         ]
 
-        for text in base_queries:
-            queries.append(Query(
-                text=text,
-                language=QueryLanguage.ENGLISH,
-                priority=1.0,
-                cycle=self.state.current_cycle,
-            ))
+    def get_uninvestigated_institutions(self) -> list[Entity]:
+        """Institutions mentioned but not yet investigated."""
+        return [
+            e for e in self.entities.values()
+            if e.entity_type == EntityType.INSTITUTION
+            and not e.investigated
+        ]
 
-        # Add queries in local languages
-        country_lower = country.lower()
-        if country_lower in COUNTRY_LANGUAGES:
-            for lang in COUNTRY_LANGUAGES[country_lower]:
-                if lang == QueryLanguage.ENGLISH:
-                    continue
-                translated = translate_query(
-                    f"{topic} {discipline} research {country}", lang
+    def snapshot(self) -> dict[str, Any]:
+        """Return current state as a dict."""
+        return {
+            "scholars": len(self.scholars),
+            "theories": len(self.theories),
+            "institutions": len(self.institutions),
+            "total_entities": len(self.entities),
+            "languages": sorted(self.languages_covered),
+        }
+
+    def describe(self) -> str:
+        """Human-readable description of current postulate state."""
+        lines = [
+            f"Topic: {self.topic}",
+            f"Country: {self.country}",
+            f"Discipline: {self.discipline}",
+            f"Scholars tracked: {len(self.scholars)}",
+            f"Theories: {len(self.theories)}",
+            f"Institutions: {len(self.institutions)}",
+            f"Languages covered: {', '.join(sorted(self.languages_covered))}",
+            f"Total entities: {len(self.entities)}",
+        ]
+        uninvestigated = self.get_uninvestigated_scholars()
+        if uninvestigated:
+            top = sorted(uninvestigated, key=lambda e: -e.times_mentioned)[:5]
+            lines.append(f"Uninvestigated scholars (top {len(top)}):")
+            for e in top:
+                lines.append(
+                    f"  - {e.name} (mentioned {e.times_mentioned}x)"
                 )
-                queries.append(Query(
-                    text=translated,
+        return "\n".join(lines)
+
+
+# ============================================================
+# MULTILINGUAL QUERY GENERATOR
+# ============================================================
+
+class MultilingualQueryGenerator:
+    """Generates multilingual search queries from postulate state."""
+
+    def __init__(self, postulates: DynamicPostulates) -> None:
+        self.postulates = postulates
+
+    def generate_initial_queries(self) -> list[SearchQuery]:
+        """Generate seed queries in all relevant languages."""
+        queries: list[SearchQuery] = []
+        topic = self.postulates.topic
+        country = self.postulates.country
+        discipline = self.postulates.discipline
+
+        geo = GEOGRAPHIC_LINGUISTIC.get(country, {})
+        primary_langs = geo.get("primary_languages", ["en"])
+        foreign = geo.get("foreign_traditions", {})
+
+        # Queries in primary languages
+        for lang in primary_langs:
+            if lang == "en":
+                queries.append(SearchQuery(
+                    query=f"{topic} {discipline} research {country}",
+                    language="en",
+                    rationale=f"Seed English query for {topic}",
+                    priority=Severity.HIGH,
+                    target_gap=GapType.LINGUISTIC,
+                ))
+            else:
+                # Translate key terms if possible
+                translated_terms = []
+                for term in self._extract_key_terms(topic):
+                    translated = self._transliterate(term, lang)
+                    translated_terms.append(translated)
+                if translated_terms:
+                    q = " ".join(translated_terms)
+                    queries.append(SearchQuery(
+                        query=q,
+                        language=lang,
+                        rationale=f"Seed query in {lang} for {topic}",
+                        priority=Severity.HIGH,
+                        target_gap=GapType.LINGUISTIC,
+                    ))
+
+        # Queries for foreign academic traditions
+        for lang, tradition_name in foreign.items():
+            if lang not in primary_langs:
+                translated = self._transliterate(topic, lang)
+                queries.append(SearchQuery(
+                    query=f"{translated} {discipline} {tradition_name}",
                     language=lang,
-                    priority=0.8,
-                    cycle=self.state.current_cycle,
+                    rationale=f"Foreign tradition: {tradition_name}",
+                    priority=Severity.MEDIUM,
+                    target_gap=GapType.INSTITUTIONAL,
                 ))
 
-        self.state.queries.extend(queries)
+        # Academic English query
+        queries.append(SearchQuery(
+            query=f'"{topic}" academic research peer-reviewed {discipline}',
+            language="en",
+            rationale="Academic peer-reviewed sources",
+            priority=Severity.MEDIUM,
+            target_gap=GapType.SOURCE_TYPE,
+        ))
+
         return queries
 
-    def generate_queries_from_anomalies(self) -> list[Query]:
-        """Generate targeted queries from detected anomalies."""
-        queries = []
-        for anomaly in self.state.unresolved_anomalies:
-            for suggested in anomaly.suggested_queries:
-                q = Query(
-                    text=suggested,
-                    language=QueryLanguage.ENGLISH,
-                    priority=0.9,
-                    source_anomaly_id=anomaly.id,
-                    cycle=self.state.current_cycle,
-                )
-                queries.append(q)
+    def generate_gap_filling_queries(
+        self, anomalies: list[Anomaly]
+    ) -> list[SearchQuery]:
+        """Generate targeted queries to fill detected gaps."""
+        queries: list[SearchQuery] = []
+        seen: set[tuple[str, str]] = set()
 
-        self.state.queries.extend(queries)
-        return queries
+        for anomaly in anomalies:
+            gap = anomaly.gap_type
 
-    def execute_queries(self, queries: list[Query] | None = None) -> list[ConnectorResponse]:
-        """Execute pending queries through the connector."""
-        if queries is None:
-            queries = [q for q in self.state.queries if not q.executed]
+            if gap == GapType.ENTITY_UNRESEARCHED:
+                uninvestigated = self.postulates.get_uninvestigated_scholars()
+                top = sorted(
+                    uninvestigated, key=lambda e: -e.times_mentioned
+                )[:5]
+                for entity in top:
+                    for lang in self._relevant_languages():
+                        q = f"{entity.name} {self.postulates.topic} research"
+                        key = (q.lower(), lang)
+                        if key not in seen:
+                            seen.add(key)
+                            queries.append(SearchQuery(
+                                query=q,
+                                language=lang,
+                                rationale=f"Investigate {entity.name}",
+                                priority=Severity.HIGH,
+                                target_gap=GapType.ENTITY_UNRESEARCHED,
+                            ))
 
-        responses = []
-        # Sort by priority (highest first)
-        sorted_queries = sorted(queries, key=lambda q: q.priority, reverse=True)
-
-        for query in sorted_queries:
-            if query.executed:
-                continue
-            response = self.connector.search(query.text)
-            query.executed = True
-            query.result_count = len(response.text) if response.text else 0
-            self.content_analysis.register_query(query)
-            responses.append(response)
-
-        return responses
-
-    def ingest_results(self, responses: list[ConnectorResponse]) -> list[Finding]:
-        """Extract entities from responses and add to state."""
-        new_findings: list[Finding] = []
-
-        for response in responses:
-            entities = extract_entities(response.text)
-            for entity in entities:
-                if self.state.add_finding(entity):
-                    new_findings.append(entity)
-                    # Register in subsystems
-                    self.citation_graph.add_finding(entity)
-                    self.content_analysis.register_finding(entity)
-
-                    # Register evidence for discipline expectations
-                    if entity.finding_type == FindingType.EVIDENCE:
-                        new_postulates = self.discipline_expectations.register_evidence(entity)
-                        self.state.postulates.extend(new_postulates)
-
-                    # Try to confirm discipline expectations from scholars
-                    if entity.finding_type == FindingType.SCHOLAR:
-                        self.discipline_expectations.confirm_from_finding(entity)
-
-        return new_findings
-
-    def update_postulates(self, new_findings: list[Finding]) -> None:
-        """Update postulate statuses based on new findings."""
-        for postulate in self.state.postulates:
-            if postulate.status == PostulateStatus.CONFIRMED:
-                continue
-            self._try_confirm_postulate(postulate, new_findings)
-
-    def _try_confirm_postulate(
-        self, postulate: Postulate, findings: list[Finding]
-    ) -> None:
-        """Try to confirm a postulate based on available findings."""
-        desc_lower = postulate.description.lower()
-
-        for finding in findings:
-            finding_text = f"{finding.name} {finding.description}".lower()
-
-            # Language postulates
-            if postulate.meta_axiom_id == "MA-01":
-                if "local language" in desc_lower or "non-english" in desc_lower:
-                    if finding.language != QueryLanguage.ENGLISH:
-                        postulate.confirm(finding.name)
-                        return
-                if "terminology" in desc_lower and finding.finding_type == FindingType.OTHER:
-                    postulate.confirm(finding.name)
-                    return
-
-            # Institution postulates
-            elif postulate.meta_axiom_id == "MA-02":
-                if finding.finding_type == FindingType.INSTITUTION:
-                    if "university" in desc_lower and "university" in finding_text:
-                        postulate.confirm(finding.name)
-                        return
-                    if "government" in desc_lower and any(
-                        w in finding_text for w in ["ministry", "government", "state"]
-                    ):
-                        postulate.confirm(finding.name)
-                        return
-                    if "international" in desc_lower:
-                        postulate.confirm(finding.name)
-                        return
-
-            # Theory postulates
-            elif postulate.meta_axiom_id == "MA-03":
-                if finding.finding_type == FindingType.THEORY:
-                    theories = [
-                        f for f in self.state.findings
-                        if f.finding_type == FindingType.THEORY
-                    ]
-                    if len(set(theories)) >= 2:
-                        postulate.confirm(finding.name)
-                        return
-
-            # School postulates
-            elif postulate.meta_axiom_id == "MA-04":
-                schools = self.citation_graph.detect_schools()
-                if len(schools) >= 2:
-                    postulate.confirm(finding.name)
-                    return
-                if finding.finding_type == FindingType.SCHOOL:
-                    postulate.confirm(finding.name)
-                    return
-
-            # Discipline postulates
-            elif postulate.meta_axiom_id == "MA-05":
-                if finding.finding_type in (FindingType.METHOD, FindingType.EVIDENCE):
-                    disciplines_found = len(
-                        self.discipline_expectations.all_expected_disciplines
-                    )
-                    if disciplines_found >= 2:
-                        postulate.confirm(finding.name)
-                        return
-
-            # Publication postulates
-            elif postulate.meta_axiom_id == "MA-06":
-                if finding.finding_type == FindingType.PUBLICATION:
-                    postulate.confirm(finding.name)
-                    return
-                # Check if any publication-related terms in findings
-                if any(w in finding_text for w in [
-                    "journal", "proceedings", "publication", "published",
-                    "thesis", "report", "book",
-                ]):
-                    postulate.confirm(finding.name)
-                    return
-
-            # Temporal postulates
-            elif postulate.meta_axiom_id == "MA-07":
-                if "span" in desc_lower or "decades" in desc_lower:
-                    # Check if we have findings from different eras
-                    if any(w in finding_text for w in [
-                        "1960", "1970", "1980", "1990", "2000", "2010",
-                        "earlier", "pioneer", "historical", "early",
-                    ]):
-                        postulate.confirm(finding.name)
-                        return
-                if "earlier interpretations" in desc_lower:
-                    if any(w in finding_text for w in [
-                        "revised", "reinterpreted", "previously",
-                        "earlier", "original", "initial",
-                    ]):
-                        postulate.confirm(finding.name)
-                        return
-
-    def detect_anomalies(self) -> list[Anomaly]:
-        """Run all anomaly detectors and collect results."""
-        new_anomalies: list[Anomaly] = []
-
-        # Citation graph anomalies
-        cg_anomalies = self.citation_graph.generate_anomalies()
-        for a in cg_anomalies:
-            a.detected_at_cycle = self.state.current_cycle
-            if self.state.add_anomaly(a):
-                new_anomalies.append(a)
-
-        # Discipline gap anomalies
-        disc_anomalies = self.discipline_expectations.detect_anomalies()
-        for a in disc_anomalies:
-            a.detected_at_cycle = self.state.current_cycle
-            if self.state.add_anomaly(a):
-                new_anomalies.append(a)
-
-        # Content analysis anomalies
-        ca_anomalies = self.content_analysis.detect_all_anomalies()
-        for a in ca_anomalies:
-            a.detected_at_cycle = self.state.current_cycle
-            if self.state.add_anomaly(a):
-                new_anomalies.append(a)
-
-        # Language gap check
-        lang_anomaly = self._check_language_gaps()
-        if lang_anomaly:
-            lang_anomaly.detected_at_cycle = self.state.current_cycle
-            if self.state.add_anomaly(lang_anomaly):
-                new_anomalies.append(lang_anomaly)
-
-        return new_anomalies
-
-    def _check_language_gaps(self) -> Anomaly | None:
-        """Check if we're missing findings in expected languages."""
-        country_lower = self.state.country.lower()
-        expected_langs = COUNTRY_LANGUAGES.get(country_lower, [])
-
-        if not expected_langs:
-            return None
-
-        found_langs = {f.language for f in self.state.findings}
-        non_english_expected = [
-            l for l in expected_langs if l != QueryLanguage.ENGLISH
-        ]
-
-        for lang in non_english_expected:
-            if lang not in found_langs:
-                return Anomaly(
-                    id=f"A-LANG-{lang.value}",
-                    anomaly_type=AnomalyType.LANGUAGE_GAP,
-                    severity=Severity.HIGH,
-                    description=(
-                        f"No {lang.name}-language sources found for research in "
-                        f"{self.state.country}"
-                    ),
-                    suggested_queries=[
-                        translate_query(
-                            f"{self.state.topic} {self.state.discipline} research",
-                            lang,
+            elif gap == GapType.LINGUISTIC:
+                covered = self.postulates.languages_covered
+                for lang in self._relevant_languages():
+                    if lang not in covered:
+                        translated = self._transliterate(
+                            self.postulates.topic, lang
                         )
-                    ],
+                        q = f"{translated} research"
+                        key = (q.lower(), lang)
+                        if key not in seen:
+                            seen.add(key)
+                            queries.append(SearchQuery(
+                                query=q,
+                                language=lang,
+                                rationale=f"Fill language gap: {lang}",
+                                priority=Severity.HIGH,
+                                target_gap=GapType.LINGUISTIC,
+                            ))
+
+            elif gap == GapType.INSTITUTIONAL:
+                uninvestigated = (
+                    self.postulates.get_uninvestigated_institutions()
                 )
+                for inst in uninvestigated[:3]:
+                    q = f"{inst.name} {self.postulates.topic} publications"
+                    key = (q.lower(), "en")
+                    if key not in seen:
+                        seen.add(key)
+                        queries.append(SearchQuery(
+                            query=q,
+                            language="en",
+                            rationale=f"Investigate institution: {inst.name}",
+                            priority=Severity.MEDIUM,
+                            target_gap=GapType.INSTITUTIONAL,
+                        ))
 
-        return None
+            elif gap == GapType.THEORY_UNSOURCED:
+                for theory in self.postulates.theories:
+                    q = (
+                        f'"{theory}" academic paper peer-reviewed '
+                        f"{self.postulates.topic}"
+                    )
+                    key = (q.lower(), "en")
+                    if key not in seen:
+                        seen.add(key)
+                        queries.append(SearchQuery(
+                            query=q,
+                            language="en",
+                            rationale=f"Find peer-reviewed source for: {theory}",
+                            priority=Severity.HIGH,
+                            target_gap=GapType.THEORY_UNSOURCED,
+                        ))
 
-    def calculate_coverage(self) -> CoverageScore:
-        """Calculate current coverage score."""
-        coverage = self.state.current_coverage()
-        coverage.cycle = self.state.current_cycle
-        self.state.coverage_history.append(coverage)
-        return coverage
+            # Use anomaly's own suggested queries
+            for sq in anomaly.suggested_queries:
+                key = (sq.lower(), "en")
+                if key not in seen:
+                    seen.add(key)
+                    queries.append(SearchQuery(
+                        query=sq,
+                        language="en",
+                        rationale=f"Anomaly-suggested: {anomaly.description[:40]}",
+                        priority=anomaly.severity,
+                        target_gap=anomaly.gap_type,
+                    ))
 
-    def run_cycle(self, cycle: int | None = None) -> CoverageScore:
-        """Run a single audit cycle."""
-        if cycle is not None:
-            self.state.current_cycle = cycle
+        return queries
 
-        if self.state.current_cycle == 0:
-            # First cycle: initialize everything
-            if not self.state.postulates:
-                self.initialize_postulates()
-            queries = self.generate_initial_queries()
-        else:
-            # Subsequent cycles: generate queries from anomalies
-            queries = self.generate_queries_from_anomalies()
-            if not queries:
-                # If no anomaly-driven queries, generate broader queries
-                queries = self._generate_broadening_queries()
+    def _relevant_languages(self) -> set[str]:
+        """All languages relevant to this country."""
+        geo = GEOGRAPHIC_LINGUISTIC.get(self.postulates.country, {})
+        langs = set(geo.get("primary_languages", []))
+        langs.update(geo.get("foreign_traditions", {}).keys())
+        langs.add("en")
+        return langs
 
-        # Execute queries
-        responses = self.execute_queries(queries)
-
-        # Ingest results
-        new_findings = self.ingest_results(responses)
-
-        # Update postulates
-        self.update_postulates(new_findings)
-
-        # Detect anomalies
-        self.detect_anomalies()
-
-        # Calculate coverage
-        coverage = self.calculate_coverage()
-
-        if self.verbose:
-            print(
-                f"Cycle {self.state.current_cycle}: "
-                f"{len(new_findings)} new findings, "
-                f"coverage={coverage.percentage}%, "
-                f"anomalies={coverage.anomaly_count}"
-            )
-
-        return coverage
-
-    def _generate_broadening_queries(self) -> list[Query]:
-        """Generate broader queries when anomaly-driven ones are exhausted."""
-        topic = self.state.topic
-        country = self.state.country
-        cycle = self.state.current_cycle
-
-        templates = [
-            f"{topic} {country} criticism debate controversy",
-            f"{topic} {country} alternative interpretations",
-            f"{topic} {country} overlooked aspects",
-            f"{topic} {country} interdisciplinary studies",
+    def _extract_key_terms(self, topic: str) -> list[str]:
+        """Extract searchable terms from a topic string."""
+        import re
+        words = re.split(r"[\s,;.\-/]+", topic)
+        return [
+            w for w in words
+            if len(w) > 3 and w.lower() not in STOPWORDS
         ]
 
-        queries = []
-        for text in templates[:2]:  # Limit to 2 per cycle
-            queries.append(Query(
-                text=text,
-                language=QueryLanguage.ENGLISH,
-                priority=0.7,
-                cycle=cycle,
+    def _transliterate(self, term: str, language: str) -> str:
+        """Translate a term to another language if possible."""
+        for name, translations in TRANSLITERATIONS.items():
+            if term.lower() == name.lower() and language in translations:
+                return translations[language]
+
+        geo = GEOGRAPHIC_LINGUISTIC.get(self.postulates.country, {})
+        trans_map = geo.get("transliteration_map", {})
+        if language in trans_map:
+            for eng, local in trans_map[language].items():
+                if eng.lower() in term.lower():
+                    return term.lower().replace(eng.lower(), local)
+
+        return term
+
+
+# ============================================================
+# DYNAMIC INFERENCE ENGINE
+# ============================================================
+
+class DynamicInferenceEngine:
+    """Derives expectations from the current state of postulates.
+
+    Each sub-method corresponds to a meta-axiom:
+      _linguistic      → MA-01 Linguistic Diversity
+      _institutional   → MA-02 Institutional Multiplicity
+      _plurality       → MA-03 Theoretical Pluralism + MA-04 School Formation
+      _source_types    → MA-06 Publication Channels
+      _temporal        → MA-07 Temporal Evolution
+      _entity_coverage → MA-05 Disciplinary Breadth
+    """
+
+    MIN_VOICES_PER_THEORY = 2
+    EXPECTED_VOICES_RATIO = 3
+    MIN_INVESTIGATION_RATIO = 0.5
+
+    def __init__(self, postulates: DynamicPostulates) -> None:
+        self.postulates = postulates
+
+    def derive(self, cycle: int) -> list[Expectation]:
+        """Derive all expectations for the current cycle."""
+        expectations: list[Expectation] = []
+        expectations.extend(self._linguistic(cycle))
+        expectations.extend(self._plurality(cycle))
+        expectations.extend(self._source_types(cycle))
+        expectations.extend(self._temporal(cycle))
+        expectations.extend(self._entity_coverage(cycle))
+        expectations.extend(self._institutional(cycle))
+        return expectations
+
+    def _linguistic(self, cycle: int) -> list[Expectation]:
+        """Expectations for primary language coverage and foreign traditions."""
+        expectations: list[Expectation] = []
+        geo = GEOGRAPHIC_LINGUISTIC.get(self.postulates.country, {})
+
+        for lang in geo.get("primary_languages", []):
+            expectations.append(Expectation(
+                description=f"Sources in '{lang}' language found",
+                gap_type=GapType.LINGUISTIC,
+                severity_if_unmet=Severity.HIGH,
+                derived_in_cycle=cycle,
             ))
 
-        self.state.queries.extend(queries)
-        return queries
+        for lang, tradition in geo.get("foreign_traditions", {}).items():
+            expectations.append(Expectation(
+                description=f"Sources checked from {tradition} ({lang})",
+                gap_type=GapType.INSTITUTIONAL,
+                severity_if_unmet=Severity.MEDIUM,
+                derived_in_cycle=cycle,
+            ))
 
-    def run_all_cycles(
-        self, max_cycles: int = 4, convergence_threshold: float = 2.0
-    ) -> list[CoverageScore]:
-        """Run all cycles until convergence or max cycles reached.
+        return expectations
 
-        Convergence: coverage increase < threshold between cycles.
-        """
-        all_coverage: list[CoverageScore] = []
+    def _plurality(self, cycle: int) -> list[Expectation]:
+        """Expectations for theoretical pluralism and voice diversity."""
+        expectations: list[Expectation] = []
+        n_theories = len(self.postulates.theories)
 
-        for cycle in range(max_cycles):
-            coverage = self.run_cycle(cycle)
-            all_coverage.append(coverage)
+        if n_theories > 0:
+            min_scholars = n_theories * self.MIN_VOICES_PER_THEORY
+            expectations.append(Expectation(
+                description=(
+                    f"At least {min_scholars} scholars supporting "
+                    f"{n_theories} theories"
+                ),
+                gap_type=GapType.VOICE,
+                severity_if_unmet=Severity.MEDIUM,
+                derived_in_cycle=cycle,
+            ))
 
-            # Check convergence after at least 2 cycles
-            if cycle >= 2 and len(all_coverage) >= 2:
-                prev = all_coverage[-2].percentage
-                curr = coverage.percentage
-                if curr - prev < convergence_threshold:
-                    if self.verbose:
-                        print(
-                            f"Convergence reached at cycle {cycle}: "
-                            f"{curr - prev:.1f}% improvement < {convergence_threshold}%"
-                        )
-                    break
+            for theory in self.postulates.theories:
+                expectations.append(Expectation(
+                    description=f"Peer-reviewed source for theory: {theory}",
+                    gap_type=GapType.THEORY_UNSOURCED,
+                    severity_if_unmet=Severity.HIGH,
+                    derived_in_cycle=cycle,
+                ))
 
-            self.state.current_cycle += 1
+        return expectations
 
-        return all_coverage
+    def _source_types(self, cycle: int) -> list[Expectation]:
+        """Expectations for source type diversity."""
+        return [
+            Expectation(
+                description="Peer-reviewed sources found",
+                gap_type=GapType.SOURCE_TYPE,
+                severity_if_unmet=Severity.HIGH,
+                derived_in_cycle=cycle,
+            ),
+            Expectation(
+                description="Institutional sources found",
+                gap_type=GapType.SOURCE_TYPE,
+                severity_if_unmet=Severity.MEDIUM,
+                derived_in_cycle=cycle,
+            ),
+            Expectation(
+                description="Quality journalistic sources found",
+                gap_type=GapType.SOURCE_TYPE,
+                severity_if_unmet=Severity.LOW,
+                derived_in_cycle=cycle,
+            ),
+        ]
+
+    def _temporal(self, cycle: int) -> list[Expectation]:
+        """Expectations for temporal coverage."""
+        expectations: list[Expectation] = []
+        if self.postulates.ongoing:
+            expectations.append(Expectation(
+                description="Sources from last 3 years found",
+                gap_type=GapType.TEMPORAL,
+                severity_if_unmet=Severity.MEDIUM,
+                derived_in_cycle=cycle,
+            ))
+        if self.postulates.discovery_year > 0:
+            expectations.append(Expectation(
+                description=(
+                    f"Sources span from {self.postulates.discovery_year} "
+                    "to present"
+                ),
+                gap_type=GapType.TEMPORAL,
+                severity_if_unmet=Severity.MEDIUM,
+                derived_in_cycle=cycle,
+            ))
+        return expectations
+
+    def _entity_coverage(self, cycle: int) -> list[Expectation]:
+        """DYNAMIC: expect investigation of frequently-mentioned scholars."""
+        expectations: list[Expectation] = []
+        for entity in self.postulates.entities.values():
+            if (
+                entity.entity_type == EntityType.SCHOLAR
+                and entity.times_mentioned >= 2
+                and not entity.investigated
+            ):
+                expectations.append(Expectation(
+                    description=(
+                        f"Scholar '{entity.name}' investigated "
+                        f"(mentioned {entity.times_mentioned}x)"
+                    ),
+                    gap_type=GapType.ENTITY_UNRESEARCHED,
+                    severity_if_unmet=Severity.HIGH,
+                    derived_in_cycle=cycle,
+                ))
+        return expectations
+
+    def _institutional(self, cycle: int) -> list[Expectation]:
+        """Expectations for institutional publication review."""
+        expectations: list[Expectation] = []
+        for inst in self.postulates.institutions:
+            expectations.append(Expectation(
+                description=f"Publications from {inst} reviewed",
+                gap_type=GapType.INSTITUTIONAL,
+                severity_if_unmet=Severity.MEDIUM,
+                derived_in_cycle=cycle,
+            ))
+        return expectations
+
+
+# ============================================================
+# EXPECTATION SATISFIER
+# ============================================================
+
+class ExpectationSatisfier:
+    """Checks which expectations are met by current findings."""
+
+    @staticmethod
+    def satisfy(
+        expectations: list[Expectation],
+        findings: list[Finding],
+        postulates: DynamicPostulates,
+    ) -> None:
+        """Mark expectations as satisfied based on findings."""
+        import re as _re
+
+        langs = set(f.language for f in findings)
+        types = set(f.source_type for f in findings)
+        authors = set(f.author.lower() for f in findings if f.author)
+        years = [f.year for f in findings if f.year > 0]
+        institutions = set(
+            f.institution.lower() for f in findings if f.institution
+        )
+
+        theories_sourced: set[str] = set()
+        for f in findings:
+            if f.theory_supported and f.source_type in (
+                "peer_reviewed", "peer-reviewed"
+            ):
+                theories_sourced.add(f.theory_supported.lower())
+
+        for exp in expectations:
+            if exp.met:
+                continue
+
+            desc_lower = exp.description.lower()
+
+            if exp.gap_type == GapType.LINGUISTIC:
+                for lang in langs:
+                    if f"'{lang}'" in desc_lower:
+                        exp.satisfy(f"Found sources in {lang}")
+                        break
+
+            elif exp.gap_type == GapType.INSTITUTIONAL:
+                if "sources checked" in desc_lower:
+                    for lang in langs:
+                        if f"({lang})" in desc_lower:
+                            exp.satisfy(f"Sources found in {lang}")
+                            break
+                elif "publications from" in desc_lower:
+                    for inst in institutions:
+                        if inst in desc_lower:
+                            exp.satisfy(f"Publications from {inst}")
+                            break
+
+            elif exp.gap_type == GapType.VOICE:
+                match = _re.search(r"at least (\d+)", desc_lower)
+                if match:
+                    minimum = int(match.group(1))
+                    if len(authors) >= minimum:
+                        exp.satisfy(f"{len(authors)} scholars found")
+
+            elif exp.gap_type == GapType.THEORY_UNSOURCED:
+                for theory in theories_sourced:
+                    theory_words = {
+                        w for w in theory.split() if len(w) > 4
+                    }
+                    desc_words = {
+                        w for w in desc_lower.split() if len(w) > 4
+                    }
+                    if theory_words & desc_words:
+                        exp.satisfy(f"Peer-reviewed source: {theory}")
+                        break
+
+            elif exp.gap_type == GapType.SOURCE_TYPE:
+                source_type_map = {
+                    "peer-reviewed": {"peer_reviewed", "peer-reviewed"},
+                    "institutional": {"institutional", "government"},
+                    "journalistic": {"news", "journalistic", "media"},
+                }
+                for label, accepted in source_type_map.items():
+                    if label in desc_lower and types & accepted:
+                        exp.satisfy(f"Found {label} sources")
+                        break
+
+            elif exp.gap_type == GapType.TEMPORAL:
+                if "last 3" in desc_lower and years:
+                    if max(years) >= 2023:
+                        exp.satisfy(f"Recent source: {max(years)}")
+                elif "span" in desc_lower and len(years) >= 2:
+                    span = max(years) - min(years)
+                    if span >= 5:
+                        exp.satisfy(f"Temporal span: {span} years")
+
+            elif exp.gap_type == GapType.ENTITY_UNRESEARCHED:
+                for entity in postulates.entities.values():
+                    if (
+                        entity.name.lower() in desc_lower
+                        and entity.investigated
+                    ):
+                        exp.satisfy(f"{entity.name} now investigated")
+                        break
+
+
+# ============================================================
+# AUDIT ENGINE
+# ============================================================
+
+class AuditEngine:
+    """Detects anomalies from unmet expectations and structural issues."""
+
+    _RECOMMENDATIONS: dict[str, str] = {
+        GapType.LINGUISTIC.value: "Search in the missing language(s)",
+        GapType.INSTITUTIONAL.value: "Check publications from this institution",
+        GapType.VOICE.value: "Find more scholars working on this topic",
+        GapType.SOURCE_TYPE.value: "Search for this type of source",
+        GapType.ENTITY_UNRESEARCHED.value: "Investigate this scholar's work",
+        GapType.THEORY_UNSOURCED.value: "Find peer-reviewed source for this theory",
+        GapType.TEMPORAL.value: "Search for more recent or historical sources",
+        GapType.GEOGRAPHIC.value: "Expand geographic scope of search",
+    }
+
+    def __init__(
+        self,
+        expectations: list[Expectation],
+        findings: list[Finding],
+        postulates: DynamicPostulates,
+    ) -> None:
+        self.expectations = expectations
+        self.findings = findings
+        self.postulates = postulates
+        self.anomalies: list[Anomaly] = []
+
+    def run(self) -> list[Anomaly]:
+        """Run all anomaly checks."""
+        self.anomalies = []
+        self._check_unmet()
+        self._check_monolingual()
+        self._check_investigation_ratio()
+        return self.anomalies
+
+    def _check_unmet(self) -> None:
+        """Create an anomaly for each unmet expectation."""
+        for exp in self.expectations:
+            if not exp.met:
+                rec = self._RECOMMENDATIONS.get(
+                    exp.gap_type.value, "Investigate further",
+                )
+                self.anomalies.append(Anomaly(
+                    description=f"Unmet: {exp.description}",
+                    gap_type=exp.gap_type,
+                    severity=exp.severity_if_unmet,
+                    recommendation=rec,
+                ))
+
+    def _check_monolingual(self) -> None:
+        """Check if primary languages of the country are covered."""
+        geo = GEOGRAPHIC_LINGUISTIC.get(self.postulates.country, {})
+        primary = set(geo.get("primary_languages", []))
+        covered = self.postulates.languages_covered
+
+        for lang in primary:
+            if lang not in covered:
+                self.anomalies.append(Anomaly(
+                    description=(
+                        f"Primary language '{lang}' of "
+                        f"{self.postulates.country} not covered"
+                    ),
+                    gap_type=GapType.LINGUISTIC,
+                    severity=Severity.HIGH,
+                    recommendation=f"Search in {lang}",
+                ))
+
+    def _check_investigation_ratio(self) -> None:
+        """Flag if too few scholars are investigated."""
+        scholars = [
+            e for e in self.postulates.entities.values()
+            if e.entity_type == EntityType.SCHOLAR
+        ]
+        if not scholars:
+            return
+
+        investigated = sum(1 for s in scholars if s.investigated)
+        ratio = investigated / len(scholars)
+
+        if ratio < DynamicInferenceEngine.MIN_INVESTIGATION_RATIO:
+            uninvestigated = [s for s in scholars if not s.investigated]
+            top = sorted(
+                uninvestigated, key=lambda e: -e.times_mentioned
+            )[:7]
+            names = ", ".join(e.name for e in top)
+            self.anomalies.append(Anomaly(
+                description=(
+                    f"Only {investigated}/{len(scholars)} scholars "
+                    f"investigated ({ratio:.0%}). "
+                    f"Top uninvestigated: {names}"
+                ),
+                gap_type=GapType.ENTITY_UNRESEARCHED,
+                severity=Severity.HIGH,
+                recommendation="Investigate the listed scholars",
+            ))
+
+
+# ============================================================
+# COVERAGE CALCULATION
+# ============================================================
+
+def calculate_coverage(
+    expectations: list[Expectation],
+    anomalies: list[Anomaly],
+) -> float:
+    """Calculate weighted coverage score (0-100).
+
+    Uses severity weights: LOW=1, MEDIUM=2, HIGH=3, CRITICAL=5.
+    Anomalies penalize the score (up to -30 points).
+    """
+    if not expectations:
+        return 0.0
+
+    weighted_total = 0.0
+    weighted_met = 0.0
+
+    for exp in expectations:
+        w = exp.severity_if_unmet.weight
+        weighted_total += w
+        if exp.met:
+            weighted_met += w
+
+    base = (weighted_met / weighted_total) * 100 if weighted_total > 0 else 0
+
+    penalty = sum(a.severity.weight * 0.5 for a in anomalies)
+    penalty_norm = min(penalty, 30)
+
+    return max(base - penalty_norm, 0.0)
+
+
+# ============================================================
+# MAIN ORCHESTRATOR
+# ============================================================
+
+class EpistemixEngine:
+    """The main epistemic audit engine.
+
+    Usage:
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        queries = engine.initialize()
+        # Execute queries via connector, get findings
+        new_entities = engine.ingest_findings(findings)
+        snapshot = engine.run_cycle()
+        # Repeat for more cycles
+    """
+
+    def __init__(
+        self,
+        country: str,
+        topic: str,
+        discipline: str = "",
+    ) -> None:
+        self.postulates = DynamicPostulates(country, topic, discipline)
+        self.query_gen = MultilingualQueryGenerator(self.postulates)
+        self.findings: list[Finding] = []
+        self.all_expectations: list[Expectation] = []
+        self.all_anomalies: list[Anomaly] = []
+        self.pending_queries: list[SearchQuery] = []
+        self.cycle_history: list[CycleSnapshot] = []
+        self.current_cycle: int = 0
+
+    def initialize(self) -> list[SearchQuery]:
+        """Generate initial multilingual queries."""
+        self.pending_queries = self.query_gen.generate_initial_queries()
+        return self.pending_queries
+
+    def ingest_findings(self, new_findings: list[Finding]) -> list[str]:
+        """Ingest findings. Returns list of new entity names."""
+        all_new: list[str] = []
+        for f in new_findings:
+            f.cycle = self.current_cycle
+            self.findings.append(f)
+            new_entities = self.postulates.ingest_finding(f)
+            all_new.extend(new_entities)
+        return all_new
+
+    def run_cycle(self) -> CycleSnapshot:
+        """Run one complete audit cycle."""
+        self.current_cycle += 1
+
+        inferrer = DynamicInferenceEngine(self.postulates)
+        self.all_expectations = inferrer.derive(self.current_cycle)
+
+        ExpectationSatisfier.satisfy(
+            self.all_expectations, self.findings, self.postulates
+        )
+
+        auditor = AuditEngine(
+            self.all_expectations, self.findings, self.postulates
+        )
+        self.all_anomalies = auditor.run()
+
+        self.pending_queries = self.query_gen.generate_gap_filling_queries(
+            self.all_anomalies
+        )
+
+        coverage = calculate_coverage(
+            self.all_expectations, self.all_anomalies
+        )
+        snap = self.postulates.snapshot()
+        snapshot = CycleSnapshot(
+            cycle=self.current_cycle,
+            n_postulate_scholars=snap["scholars"],
+            n_postulate_theories=snap["theories"],
+            n_postulate_institutions=snap["institutions"],
+            n_expectations=len(self.all_expectations),
+            n_expectations_met=sum(
+                1 for e in self.all_expectations if e.met
+            ),
+            n_findings=len(self.findings),
+            n_anomalies=len(self.all_anomalies),
+            coverage_score=round(coverage, 1),
+            new_entities_discovered=[],
+            queries_generated=len(self.pending_queries),
+        )
+        self.cycle_history.append(snapshot)
+        return snapshot
+
+    def report(self) -> str:
+        """Generate a human-readable report."""
+        lines: list[str] = []
+        lines.append("=" * 60)
+        lines.append(f"EPISTEMIX AUDIT REPORT \u2014 Cycle {self.current_cycle}")
+        lines.append("=" * 60)
+
+        lines.append("\n--- Dynamic Postulates ---")
+        lines.append(self.postulates.describe())
+
+        met = sum(1 for e in self.all_expectations if e.met)
+        total = len(self.all_expectations)
+        pct = (met / total * 100) if total > 0 else 0
+        lines.append(f"\n--- Expectations: {met}/{total} ({pct:.0f}%) ---")
+        for exp in self.all_expectations:
+            mark = "\u2713" if exp.met else "\u2717"
+            lines.append(
+                f"  [{mark}] ({exp.severity_if_unmet.value.upper()}) "
+                f"{exp.description}"
+            )
+
+        lines.append(f"\n--- Findings: {len(self.findings)} ---")
+        langs = set(f.language for f in self.findings)
+        authors = set(f.author for f in self.findings if f.author)
+        lines.append(f"  Languages: {', '.join(sorted(langs))}")
+        lines.append(f"  Authors: {len(authors)}")
+
+        sorted_anomalies = sorted(
+            self.all_anomalies,
+            key=lambda a: a.severity.weight,
+            reverse=True,
+        )
+        lines.append(f"\n--- Anomalies: {len(sorted_anomalies)} ---")
+        for a in sorted_anomalies:
+            lines.append(f"  [{a.severity.value.upper()}] {a.description}")
+            if a.recommendation:
+                lines.append(f"    -> {a.recommendation}")
+
+        if self.cycle_history:
+            latest = self.cycle_history[-1]
+            score = latest.coverage_score
+            if score >= 80:
+                label = "Good"
+            elif score >= 60:
+                label = "Moderate"
+            elif score >= 40:
+                label = "Insufficient"
+            else:
+                label = "Poor"
+            lines.append(f"\n--- Coverage: {score:.1f}% ({label}) ---")
+
+        if len(self.cycle_history) > 1:
+            lines.append("\n--- Evolution ---")
+            lines.append(
+                f"{'Cycle':>6} {'Expect':>8} {'Met':>6} "
+                f"{'Anom':>6} {'Coverage':>10}"
+            )
+            for s in self.cycle_history:
+                lines.append(
+                    f"{s.cycle:>6} {s.n_expectations:>8} "
+                    f"{s.n_expectations_met:>6} {s.n_anomalies:>6} "
+                    f"{s.coverage_score:>9.1f}%"
+                )
+
+        lines.append("\n" + "=" * 60)
+        lines.append(
+            "NOTE: Coverage is always a LOWER BOUND on completeness."
+        )
+        lines.append("=" * 60)
+
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize engine state for the web API / database."""
+        coverage = (
+            self.cycle_history[-1].coverage_score
+            if self.cycle_history else 0.0
+        )
+        return {
+            "topic": self.postulates.topic,
+            "country": self.postulates.country,
+            "discipline": self.postulates.discipline,
+            "cycle": self.current_cycle,
+            "coverage_percentage": coverage,
+            "expectations_met": sum(
+                1 for e in self.all_expectations if e.met
+            ),
+            "total_expectations": len(self.all_expectations),
+            "total_findings": len(self.findings),
+            "total_anomalies": len(self.all_anomalies),
+            "coverage_history": [
+                s.to_dict() for s in self.cycle_history
+            ],
+            "postulates": self.postulates.snapshot(),
+            "findings": [f.to_dict() for f in self.findings],
+            "expectations": [e.to_dict() for e in self.all_expectations],
+            "anomalies": [a.to_dict() for a in self.all_anomalies],
+            "pending_queries": [q.to_dict() for q in self.pending_queries],
+        }

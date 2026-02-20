@@ -4,158 +4,148 @@ from epistemix.content_analysis import (
     ContentAnalysisEngine,
     ConvergenceAnalyzer,
     EmptyQueryAnalyzer,
-    StructuralAbsenceAnalyzer,
+    QueryResult,
+    StructuralAbsenceDetector,
+    StructuralFact,
+    TheoryPosition,
 )
-from epistemix.models import (
-    AnomalyType,
-    Finding,
-    FindingType,
-    Query,
-    QueryLanguage,
-    Severity,
-)
+from epistemix.models import GapType
 
 
-class TestStructuralAbsenceAnalyzer:
-    def test_detect_absences(self):
-        sa = StructuralAbsenceAnalyzer()
-        for name in ["Alice", "Bob", "Carol", "Dave"]:
-            sa.register_found(Finding(name=name, finding_type=FindingType.SCHOLAR))
-        # Only Alice is discussed
-        sa.register_discussed("Alice", FindingType.SCHOLAR)
-        anomalies = sa.detect_absences()
-        assert len(anomalies) == 1
-        assert anomalies[0].anomaly_type == AnomalyType.STRUCTURAL_ABSENCE
-        assert "3/4" in anomalies[0].description
-
-    def test_no_anomaly_below_threshold(self):
-        sa = StructuralAbsenceAnalyzer()
-        # Only 2 found — below minimum of 3
-        sa.register_found(Finding(name="Alice", finding_type=FindingType.SCHOLAR))
-        sa.register_found(Finding(name="Bob", finding_type=FindingType.SCHOLAR))
-        anomalies = sa.detect_absences()
+class TestStructuralAbsenceDetector:
+    def test_all_addressed(self):
+        detector = StructuralAbsenceDetector()
+        fact = StructuralFact(
+            description="Tomb contents",
+            items=["skeleton", "coins"],
+        )
+        fact.register_addressing("Theory A", ["skeleton", "coins"])
+        detector.register_fact(fact)
+        anomalies = detector.generate_anomalies()
         assert len(anomalies) == 0
 
-    def test_no_anomaly_when_all_discussed(self):
-        sa = StructuralAbsenceAnalyzer()
-        for name in ["Alice", "Bob", "Carol"]:
-            sa.register_found(Finding(name=name, finding_type=FindingType.SCHOLAR))
-            sa.register_discussed(name, FindingType.SCHOLAR)
-        anomalies = sa.detect_absences()
-        assert len(anomalies) == 0
+    def test_unaddressed_items(self):
+        detector = StructuralAbsenceDetector()
+        fact = StructuralFact(
+            description="Five individuals in tomb",
+            items=["woman ~60", "man 35-45", "newborn", "cremated"],
+        )
+        fact.register_addressing("Theory A", ["woman ~60"])
+        detector.register_fact(fact)
+        anomalies = detector.generate_anomalies()
+        assert len(anomalies) >= 1
+        assert anomalies[0].gap_type == GapType.STRUCTURAL_ABSENCE
+
+    def test_severity_increases_with_ratio(self):
+        detector = StructuralAbsenceDetector()
+        fact = StructuralFact(
+            description="Test",
+            items=["a", "b", "c", "d"],
+        )
+        # None addressed = 100% unaddressed = CRITICAL
+        detector.register_fact(fact)
+        anomalies = detector.generate_anomalies()
+        assert anomalies[0].severity.value == "critical"
 
 
 class TestConvergenceAnalyzer:
     def test_high_convergence(self):
-        ca = ConvergenceAnalyzer()
-        for _ in range(9):
-            ca.register_claim("Alexander the Great burial")
-        ca.register_claim("Hephaestion memorial")
-        # 10 claims, 2 unique → uniformity = 1 - 2/10 = 0.8
-        assert ca.uniformity_score() > 0.7
-        anomalies = ca.detect_anomalies()
-        assert any(a.anomaly_type == AnomalyType.CONVERGENCE_EXCESS for a in anomalies)
+        analyzer = ConvergenceAnalyzer()
+        # 9 same answers + 1 different = high uniformity
+        for i in range(9):
+            analyzer.register_position(TheoryPosition(
+                question="Who is buried?",
+                theory=f"Scholar{i}",
+                answer="Hephaestion",
+            ))
+        analyzer.register_position(TheoryPosition(
+            question="Who is buried?",
+            theory="Outlier",
+            answer="Olympias",
+        ))
+        score = analyzer.uniformity_score()
+        assert score > 0.7
+        anomalies = analyzer.generate_anomalies()
+        convergence = [
+            a for a in anomalies
+            if a.gap_type == GapType.CONVERGENCE_EXCESS
+        ]
+        assert len(convergence) >= 1
 
-    def test_high_divergence(self):
-        ca = ConvergenceAnalyzer()
-        for i in range(10):
-            ca.register_claim(f"unique claim {i}")
-        assert ca.uniformity_score() < 0.1
-        anomalies = ca.detect_anomalies()
-        assert any(a.anomaly_type == AnomalyType.DIVERGENCE_EXCESS for a in anomalies)
+    def test_balanced_positions(self):
+        analyzer = ConvergenceAnalyzer()
+        analyzer.register_position(TheoryPosition(
+            question="Q", theory="A", answer="X",
+        ))
+        analyzer.register_position(TheoryPosition(
+            question="Q", theory="B", answer="Y",
+        ))
+        score = analyzer.uniformity_score()
+        assert 0.0 <= score <= 0.5
 
-    def test_balanced_no_anomaly(self):
-        ca = ConvergenceAnalyzer()
-        # Mix of repeated and unique — moderate uniformity
-        for _ in range(3):
-            ca.register_claim("theory A")
-        for _ in range(3):
-            ca.register_claim("theory B")
-        ca.register_claim("theory C")
-        score = ca.uniformity_score()
-        assert 0.1 <= score <= 0.7
-        anomalies = ca.detect_anomalies()
-        assert len(anomalies) == 0
-
-    def test_too_few_claims(self):
-        ca = ConvergenceAnalyzer()
-        ca.register_claim("only one")
-        anomalies = ca.detect_anomalies()
-        assert len(anomalies) == 0
+    def test_empty_returns_zero(self):
+        analyzer = ConvergenceAnalyzer()
+        assert analyzer.uniformity_score() == 0.0
 
 
 class TestEmptyQueryAnalyzer:
-    def test_high_empty_ratio(self):
-        eq = EmptyQueryAnalyzer()
-        for i in range(6):
-            q = Query(text=f"query {i}", executed=True, result_count=0)
-            eq.register_query(q)
-        for i in range(4):
-            q = Query(text=f"good query {i}", executed=True, result_count=3)
-            eq.register_query(q)
-        assert eq.empty_ratio == 0.6
-        anomalies = eq.detect_anomalies()
-        assert any(a.anomaly_type == AnomalyType.EMPTY_QUERY_PATTERN for a in anomalies)
-
-    def test_language_pattern(self):
-        eq = EmptyQueryAnalyzer()
-        # Greek queries mostly empty
+    def test_language_gap_detection(self):
+        analyzer = EmptyQueryAnalyzer()
+        # Greek: 3 queries, all empty
         for i in range(3):
-            eq.register_query(Query(
-                text=f"greek query {i}",
-                language=QueryLanguage.GREEK,
-                executed=True,
-                result_count=0,
+            analyzer.register_result(QueryResult(
+                query=f"query{i}", language="el", empty=True,
             ))
-        eq.register_query(Query(
-            text="english query",
-            language=QueryLanguage.ENGLISH,
-            executed=True,
-            result_count=5,
-        ))
-        anomalies = eq.detect_language_pattern()
-        assert len(anomalies) >= 1
-        assert "GREEK" in anomalies[0].description
+        # English: 2 queries, all productive
+        for i in range(2):
+            analyzer.register_result(QueryResult(
+                query=f"query{i}", language="en",
+                findings_count=3, empty=False,
+            ))
+        anomalies = analyzer.generate_anomalies()
+        el_anomalies = [
+            a for a in anomalies
+            if "'el'" in a.description
+        ]
+        assert len(el_anomalies) >= 1
 
-    def test_no_anomaly_low_empty(self):
-        eq = EmptyQueryAnalyzer()
-        for i in range(10):
-            eq.register_query(Query(
-                text=f"query {i}", executed=True, result_count=3,
+    def test_no_anomaly_when_productive(self):
+        analyzer = EmptyQueryAnalyzer()
+        for i in range(5):
+            analyzer.register_result(QueryResult(
+                query=f"q{i}", language="en",
+                findings_count=2, empty=False,
             ))
-        assert eq.empty_ratio == 0.0
-        anomalies = eq.detect_anomalies()
+        anomalies = analyzer.generate_anomalies()
         assert len(anomalies) == 0
+
+    def test_language_productivity(self):
+        analyzer = EmptyQueryAnalyzer()
+        analyzer.register_result(QueryResult(
+            query="q1", language="en", empty=False, findings_count=3,
+        ))
+        analyzer.register_result(QueryResult(
+            query="q2", language="en", empty=True,
+        ))
+        stats = analyzer.language_productivity()
+        assert stats["en"]["total"] == 2
+        assert stats["en"]["empty"] == 1
 
 
 class TestContentAnalysisEngine:
-    def test_facade_registers_and_detects(self):
+    def test_facade_collects_all_anomalies(self):
         engine = ContentAnalysisEngine()
-
-        # Register some findings
-        for name in ["Alice", "Bob", "Carol", "Dave"]:
-            engine.register_finding(
-                Finding(name=name, finding_type=FindingType.SCHOLAR)
-            )
-        engine.register_discussed("Alice", FindingType.SCHOLAR)
-
-        # Register claims (high convergence: 9 same + 1 different = 0.8 uniformity)
-        for _ in range(9):
-            engine.register_claim("same theory")
-        engine.register_claim("different")
-
-        # Register queries
-        for i in range(6):
-            engine.register_query(
-                Query(text=f"q{i}", executed=True, result_count=0)
-            )
-        for i in range(4):
-            engine.register_query(
-                Query(text=f"good{i}", executed=True, result_count=5)
-            )
-
-        anomalies = engine.detect_all_anomalies()
-        types = {a.anomaly_type for a in anomalies}
-        assert AnomalyType.STRUCTURAL_ABSENCE in types
-        assert AnomalyType.CONVERGENCE_EXCESS in types
-        assert AnomalyType.EMPTY_QUERY_PATTERN in types
+        # Add some data to trigger anomalies
+        engine.structural.register_fact(StructuralFact(
+            description="Test",
+            items=["a", "b", "c"],
+        ))
+        for i in range(9):
+            engine.convergence.register_position(TheoryPosition(
+                question="Q", theory=f"T{i}", answer="same",
+            ))
+        engine.convergence.register_position(TheoryPosition(
+            question="Q", theory="outlier", answer="different",
+        ))
+        anomalies = engine.generate_all_anomalies()
+        assert len(anomalies) >= 2  # structural + convergence

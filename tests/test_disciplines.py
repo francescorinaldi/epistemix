@@ -1,139 +1,107 @@
 """Tests for disciplinary expectations."""
 
-from epistemix.disciplines import DisciplineExpectations, EVIDENCE_DISCIPLINE_MAP
-from epistemix.models import (
-    AnomalyType,
-    Finding,
-    FindingType,
-    PostulateStatus,
-    Severity,
+from epistemix.disciplines import (
+    ARCHAEOLOGY_DISCIPLINES,
+    DisciplineAnalyzer,
+    get_discipline_set,
 )
+from epistemix.models import Finding, GapType
 
 
-def _evidence(name: str, description: str) -> Finding:
-    return Finding(
-        name=name,
-        finding_type=FindingType.EVIDENCE,
-        description=description,
-    )
+class TestDisciplineTemplates:
+    def test_archaeology_has_disciplines(self):
+        assert len(ARCHAEOLOGY_DISCIPLINES) >= 8
+
+    def test_required_disciplines_exist(self):
+        required = [d for d in ARCHAEOLOGY_DISCIPLINES if d.required]
+        assert len(required) >= 1  # At least field archaeology
+
+    def test_get_discipline_set_default(self):
+        disciplines = get_discipline_set("unknown")
+        assert len(disciplines) > 0
 
 
-def _scholar(name: str, description: str) -> Finding:
-    return Finding(
-        name=name,
-        finding_type=FindingType.SCHOLAR,
-        description=description,
-    )
+class TestDisciplineAnalyzer:
+    def test_detects_relevant_disciplines(self):
+        analyzer = DisciplineAnalyzer("archaeology")
+        findings = [
+            Finding(
+                source="Inscription study",
+                language="en",
+                author="Alice",
+                entities_mentioned=["inscription", "monogram"],
+            ),
+        ]
+        analyzer.ingest_findings(findings)
+        summary = analyzer.coverage_summary()
+        assert "Epigraphy" in summary["relevant_disciplines"]
 
+    def test_detects_missing_specialist(self):
+        analyzer = DisciplineAnalyzer("archaeology")
+        findings = [
+            Finding(
+                source="Bone analysis",
+                language="en",
+                author="Alice",
+                entities_mentioned=["skeleton", "burial", "human remains"],
+            ),
+        ]
+        analyzer.ingest_findings(findings)
+        anomalies = analyzer.generate_anomalies()
+        disc_anomalies = [
+            a for a in anomalies if a.gap_type == GapType.DISCIPLINE_GAP
+        ]
+        assert len(disc_anomalies) >= 1
+        # Should flag Osteology as missing
+        osteology = [
+            a for a in disc_anomalies if "Osteology" in a.description
+        ]
+        assert len(osteology) >= 1
 
-class TestDisciplineExpectations:
-    def test_register_inscription_evidence(self):
-        de = DisciplineExpectations()
-        postulates = de.register_evidence(
-            _evidence("Stone tablet", "Inscription found on marble slab")
-        )
-        assert len(postulates) >= 1
-        assert "epigraphy" in de.all_expected_disciplines
+    def test_specialist_found_no_anomaly(self):
+        analyzer = DisciplineAnalyzer("archaeology")
+        findings = [
+            Finding(
+                source="DNA study by geneticist",
+                language="en",
+                author="geneticist Smith",
+                entities_mentioned=["dna", "ancient dna", "geneticist"],
+            ),
+        ]
+        analyzer.ingest_findings(findings)
+        anomalies = analyzer.generate_anomalies()
+        dna_anomalies = [
+            a for a in anomalies if "DNA" in a.description
+        ]
+        assert len(dna_anomalies) == 0
 
-    def test_register_human_remains(self):
-        de = DisciplineExpectations()
-        de.register_evidence(
-            _evidence("Skeletal remains", "Human remains of five individuals")
-        )
-        assert "osteology" in de.all_expected_disciplines
-        assert "physical anthropology" in de.all_expected_disciplines
+    def test_generate_expectations(self):
+        analyzer = DisciplineAnalyzer("archaeology")
+        findings = [
+            Finding(
+                source="Excavation report",
+                language="en",
+                author="Alice",
+                entities_mentioned=["excavation", "stratigraphy"],
+            ),
+        ]
+        analyzer.ingest_findings(findings)
+        expectations = analyzer.generate_expectations(cycle=1)
+        assert len(expectations) >= 1
 
-    def test_register_mosaic(self):
-        de = DisciplineExpectations()
-        de.register_evidence(
-            _evidence("Floor mosaic", "Mosaic depicting Persephone")
-        )
-        assert "art history" in de.all_expected_disciplines
-
-    def test_confirm_from_finding(self):
-        de = DisciplineExpectations()
-        de.register_evidence(
-            _evidence("Inscriptions", "Greek inscriptions found")
-        )
-        confirmed = de.confirm_from_finding(
-            _scholar("Dr. Smith", "Epigraphy specialist at Athens University")
-        )
-        assert "epigraphy" in confirmed
-        assert "epigraphy" not in de.missing_disciplines
-
-    def test_missing_disciplines(self):
-        de = DisciplineExpectations()
-        de.register_evidence(
-            _evidence("Bones", "Human remains and skeletal fragments")
-        )
-        de.register_evidence(
-            _evidence("Mosaic floor", "Mosaic artwork")
-        )
-        # Don't confirm any specialist
-        missing = de.missing_disciplines
-        assert "osteology" in missing
-        assert "art history" in missing
-
-    def test_detect_anomalies_amphipolis(self):
-        """Simulate the Amphipolis scenario: inscriptions, bones, mosaic
-        found but no epigrapher, osteologist, or art historian."""
-        de = DisciplineExpectations()
-        de.register_evidence(
-            _evidence("Stone inscriptions", "Greek inscriptions at entrance")
-        )
-        de.register_evidence(
-            _evidence("Skeletal remains", "Human remains of five individuals")
-        )
-        de.register_evidence(
-            _evidence("Persephone mosaic", "Floor mosaic in main chamber")
-        )
-
-        anomalies = de.detect_anomalies()
-        types = {a.description for a in anomalies}
-        # Should flag epigraphy, osteology, art history as missing
-        assert any("epigraphy" in d for d in types)
-        assert any("osteology" in d for d in types)
-        assert any("art history" in d for d in types)
-
-    def test_severity_multiple_evidence(self):
-        de = DisciplineExpectations()
-        # "burial" and "skeletal" both map to osteology
-        de.register_evidence(_evidence("Burial site", "Burial chamber found"))
-        de.register_evidence(_evidence("Bones", "Skeletal fragments analyzed"))
-        anomalies = de.detect_anomalies()
-        osteology_anomaly = next(
-            (a for a in anomalies if "osteology" in a.description), None
-        )
-        assert osteology_anomaly is not None
-        assert osteology_anomaly.severity == Severity.CRITICAL
-
-    def test_no_anomalies_when_all_confirmed(self):
-        de = DisciplineExpectations()
-        de.register_evidence(
-            _evidence("Inscriptions", "Greek inscriptions found")
-        )
-        de.confirm_from_finding(
-            _scholar("Dr. Smith", "Epigraphy expert")
-        )
-        anomalies = de.detect_anomalies()
-        assert len(anomalies) == 0
-
-    def test_postulates_created(self):
-        de = DisciplineExpectations()
-        postulates = de.register_evidence(
-            _evidence("Coins", "Bronze coins from Hellenistic period")
-        )
-        assert len(postulates) >= 1
-        assert all(p.meta_axiom_id == "MA-05" for p in postulates)
-        assert all(p.status == PostulateStatus.UNCONFIRMED for p in postulates)
-
-    def test_postulate_confirmed_on_specialist_found(self):
-        de = DisciplineExpectations()
-        de.register_evidence(
-            _evidence("Coins", "Numismatic evidence")
-        )
-        de.confirm_from_finding(
-            _scholar("Dr. Jones", "Numismatics researcher")
-        )
-        confirmed = [p for p in de._postulates if p.status == PostulateStatus.CONFIRMED]
-        assert len(confirmed) >= 1
+    def test_coverage_summary(self):
+        analyzer = DisciplineAnalyzer("archaeology")
+        findings = [
+            Finding(
+                source="Test archaeologist report",
+                language="en",
+                author="archaeologist Jones",
+                entities_mentioned=[
+                    "excavation", "archaeologist",
+                ],
+            ),
+        ]
+        analyzer.ingest_findings(findings)
+        summary = analyzer.coverage_summary()
+        assert "coverage_ratio" in summary
+        assert isinstance(summary["coverage_ratio"], float)

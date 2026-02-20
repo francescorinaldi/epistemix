@@ -1,168 +1,147 @@
-"""Full integration test — runs the complete pipeline with MockConnector."""
+"""Full integration test — runs the complete pipeline."""
 
 from epistemix.connector import MockConnector
-from epistemix.core import EpistemicEngine
+from epistemix.core import EpistemixEngine
+from epistemix.citation_graph import CitationGraph
+from epistemix.content_analysis import ContentAnalysisEngine
+from epistemix.disciplines import DisciplineAnalyzer
 from epistemix.multi_agent import MultiAgentSystem
-from epistemix.models import (
-    FindingType,
-    PostulateStatus,
-    ResearchState,
-)
-from tests.conftest import (
-    AMPHIPOLIS_TOPIC,
-    AMPHIPOLIS_COUNTRY,
-    AMPHIPOLIS_DISCIPLINE,
-)
+from epistemix.models import Finding
 
 
-# Rich mock data that exercises all modules
-INTEGRATION_RESPONSES: dict[str, str] = {
-    "amphipolis": (
-        "The Amphipolis tomb excavation in northern Greece was led by "
-        "Dr. Katerina Peristeri of the Hellenic Ministry of Culture. "
-        "The tomb dates to the 4th century BC and features caryatid sculptures, "
-        "a floor mosaic depicting the abduction of Persephone, and human remains "
-        "of at least five individuals including skeletal fragments. "
-        "Inscriptions were found near the entrance. "
-        "Prof. Michalis Lefantzis studied the architectural design. "
-        "The University of Thessaloniki provided analytical support. "
-        "Theories include the Alexander burial hypothesis and the "
-        "theory that the tomb was a memorial for Hephaestion, Alexander's companion. "
-        "The Royal family member theory suggests a Macedonian royal occupant. "
-        "Earlier excavations by Dimitrios Lazaridis in the 1960s established "
-        "the site's significance. Oscar Broneer also conducted early research. "
-        "Greek-language publications by Peristeri appeared in Archaiologiko Deltion. "
-        "The Aristotle University of Thessaloniki contributed analysis. "
-    ),
-    "alternative": (
-        "Some scholars argue the tomb's dating is uncertain. "
-        "Dr. Angeliki Kottaridi proposed alternative chronological frameworks. "
-        "Prof. Manolis Andronikos' earlier work at Vergina provides comparative "
-        "evidence. The Academy of Athens has also weighed in on the debate. "
-    ),
-    "criticism": (
-        "Critics of the Alexander hypothesis include several international scholars. "
-        "Dr. Andrew Stewart from University of California argued the architectural "
-        "style doesn't match Alexander's period precisely. "
-        "The theory of Hephaestion has been both supported and challenged."
-    ),
-    "research": (
-        "Research on the Amphipolis tomb spans multiple decades from initial "
-        "surveys in the 1960s to the major 2012 discovery. Published in "
-        "the journal Archaiologiko Deltion and presented at international "
-        "conferences including the Archaeological Institute of America meetings."
-    ),
-    "default": (
-        "The Amphipolis tomb remains one of the most significant archaeological "
-        "discoveries in Greece. Multiple research groups continue to study "
-        "various aspects of the site."
-    ),
-}
+class TestFullPipeline:
+    def test_engine_multi_cycle(
+        self, cycle_0_findings, cycle_1_findings
+    ):
+        """Test 2-cycle engine run with manual finding injection."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
 
+        # Cycle 1
+        engine.ingest_findings(cycle_0_findings)
+        snap1 = engine.run_cycle()
+        assert snap1.cycle == 1
+        assert snap1.n_findings > 0
 
-class TestIntegrated:
-    def test_full_pipeline_single_engine(self):
-        """Run the full pipeline with a single engine."""
-        mc = MockConnector(INTEGRATION_RESPONSES)
-        state = ResearchState(
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-        )
-        engine = EpistemicEngine(connector=mc, state=state)
+        # Cycle 2
+        engine.ingest_findings(cycle_1_findings)
+        snap2 = engine.run_cycle()
+        assert snap2.cycle == 2
+        assert snap2.n_findings > snap1.n_findings
 
-        # Run 3 cycles
-        coverage_history = engine.run_all_cycles(max_cycles=3)
+    def test_coverage_increases_with_more_data(
+        self, cycle_0_findings, cycle_1_findings
+    ):
+        """Coverage should generally improve with more diverse findings."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
 
-        # Should have found multiple findings
-        assert len(state.unique_findings) >= 3
+        engine.ingest_findings(cycle_0_findings)
+        snap1 = engine.run_cycle()
 
-        # Should have postulates
-        assert len(state.postulates) >= 14
+        engine.ingest_findings(cycle_1_findings)
+        snap2 = engine.run_cycle()
 
-        # Should have some confirmed postulates
-        confirmed = [p for p in state.postulates if p.status == PostulateStatus.CONFIRMED]
-        assert len(confirmed) >= 1
+        # More data = more expectations met
+        assert snap2.n_expectations_met >= snap1.n_expectations_met
 
-        # Coverage should be tracked
-        assert len(coverage_history) >= 1
-        assert coverage_history[-1].percentage > 0
+    def test_auxiliary_analyses(self, all_findings):
+        """Citation graph, disciplines, content analysis all work."""
+        # Citation graph
+        graph = CitationGraph()
+        graph.build_from_findings(all_findings)
+        summary = graph.summary()
+        assert summary["total_nodes"] > 0
 
-        # Should have detected some anomalies
-        # (at minimum, language gap for Greek)
-        assert len(state.anomalies) >= 0
+        # Disciplines
+        analyzer = DisciplineAnalyzer("archaeology")
+        analyzer.ingest_findings(all_findings)
+        disc_summary = analyzer.coverage_summary()
+        assert len(disc_summary["relevant_disciplines"]) > 0
 
-        # Findings should include various types
-        finding_types = {f.finding_type for f in state.findings}
-        assert FindingType.SCHOLAR in finding_types
+        # Content analysis
+        content = ContentAnalysisEngine()
+        anomalies = content.generate_all_anomalies()
+        assert isinstance(anomalies, list)
 
-    def test_full_pipeline_multi_agent(self):
-        """Run the full multi-agent pipeline."""
-        mc = MockConnector(INTEGRATION_RESPONSES)
-        mas = MultiAgentSystem(
-            connector=mc,
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-            max_cycles=2,
-        )
-        result = mas.run()
+    def test_multi_agent_with_real_data(self, all_findings):
+        """Multi-agent system produces valid output."""
+        from epistemix.core import DynamicPostulates
 
-        # Both agents should have run
-        assert result["alpha"]["coverage"] >= 0
-        assert result["beta"]["coverage"] >= 0
+        post = DynamicPostulates("Greece", "Amphipolis tomb", "archaeology")
+        for f in all_findings:
+            post.ingest_finding(f)
 
-        # Combined coverage should be computed
-        assert "coverage" in result["combined"]
-        assert "blindness_gap" in result["combined"]
+        system = MultiAgentSystem(post)
+        result = system.run(all_findings)
 
-        # Should have some agreements and potentially discrepancies
-        assert len(result["agreements"]) >= 1
+        assert "alpha" in result
+        assert "beta" in result
+        assert "combined" in result
+        assert result["combined"]["total_anomalies"] >= 0
+        assert result["combined"]["known_unknowns"] >= 0
 
-    def test_coverage_increases_over_cycles(self):
-        """Coverage should generally increase (or denominator grow) over cycles."""
-        mc = MockConnector(INTEGRATION_RESPONSES)
-        state = ResearchState(
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-        )
-        engine = EpistemicEngine(connector=mc, state=state)
-        coverage_history = engine.run_all_cycles(max_cycles=3)
+    def test_full_end_to_end(
+        self, cycle_0_findings, cycle_1_findings,
+        cycle_2_findings, cycle_3_findings,
+    ):
+        """Full 4-cycle audit with all auxiliary analyses."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
 
-        if len(coverage_history) >= 2:
-            # Total postulates should not decrease
-            assert coverage_history[-1].total >= coverage_history[0].total
+        all_cycles = [
+            cycle_0_findings, cycle_1_findings,
+            cycle_2_findings, cycle_3_findings,
+        ]
+        for cycle_findings in all_cycles:
+            engine.ingest_findings(cycle_findings)
+            engine.run_cycle()
 
-    def test_findings_deduplicated(self):
-        """Duplicate findings should not be counted twice."""
-        mc = MockConnector(INTEGRATION_RESPONSES)
-        state = ResearchState(
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-        )
-        engine = EpistemicEngine(connector=mc, state=state)
-        engine.run_all_cycles(max_cycles=3)
+        # Should have 4 cycle snapshots
+        assert len(engine.cycle_history) == 4
 
-        # unique_findings should have no duplicates by definition
-        unique = state.unique_findings
-        names_and_types = [(f.name.lower().strip(), f.finding_type) for f in unique]
-        assert len(names_and_types) == len(set(names_and_types))
+        # Coverage should be meaningful
+        final = engine.cycle_history[-1]
+        assert final.coverage_score > 0
 
-    def test_state_to_dict(self):
-        """The state should be serializable to a dict."""
-        mc = MockConnector(INTEGRATION_RESPONSES)
-        state = ResearchState(
-            topic=AMPHIPOLIS_TOPIC,
-            country=AMPHIPOLIS_COUNTRY,
-            discipline=AMPHIPOLIS_DISCIPLINE,
-        )
-        engine = EpistemicEngine(connector=mc, state=state)
-        engine.run_all_cycles(max_cycles=2)
+        # Engine should be serializable
+        d = engine.to_dict()
+        assert d["cycle"] == 4
+        assert len(d["coverage_history"]) == 4
+        assert len(d["findings"]) > 0
 
-        result = state.to_dict()
-        assert result["topic"] == AMPHIPOLIS_TOPIC
-        assert isinstance(result["coverage_percentage"], float)
-        assert isinstance(result["total_findings"], int)
-        assert isinstance(result["coverage_history"], list)
+        # Report should be generated
+        report = engine.report()
+        assert "Evolution" in report  # Multi-cycle shows evolution
+
+    def test_with_mock_connector(self):
+        """Test using MockConnector for query execution."""
+        connector = MockConnector()
+        connector.register_findings("amphipolis", [
+            Finding(
+                source="Paper A", language="en",
+                author="Alice", institution="MIT",
+                theory_supported="Theory X",
+                source_type="peer_reviewed", year=2024,
+            ),
+        ])
+        connector.register_findings("tomb", [
+            Finding(
+                source="Paper B", language="el",
+                author="Nikos", institution="AUTH",
+                theory_supported="Theory Y",
+                source_type="institutional", year=2023,
+            ),
+        ])
+
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        queries = engine.initialize()
+
+        # Execute queries through connector
+        findings = connector.execute_batch(queries)
+        assert len(findings) > 0
+
+        engine.ingest_findings(findings)
+        snapshot = engine.run_cycle()
+        assert snapshot.n_findings > 0
+        assert snapshot.coverage_score >= 0

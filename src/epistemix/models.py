@@ -1,7 +1,11 @@
 """Data models for the Epistemix epistemic audit framework.
 
-All data structures are centralized here to prevent circular imports
-and ensure a clean DAG dependency graph.
+All data structures are centralized here to prevent circular imports.
+Types are based on the founder's v2 dynamic design, with serialization
+methods for the production web/worker stack.
+
+Dependency: this module has ZERO internal imports — everything else
+imports from here.
 """
 
 from __future__ import annotations
@@ -16,44 +20,45 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 class Severity(Enum):
-    CRITICAL = "critical"
-    HIGH = "high"
+    """Severity levels for anomalies and expectations."""
+    LOW = "low"
     MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
     def __lt__(self, other: Severity) -> bool:
-        order = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2}
+        order = {
+            Severity.LOW: 0, Severity.MEDIUM: 1,
+            Severity.HIGH: 2, Severity.CRITICAL: 3,
+        }
         return order[self] < order[other]
 
     def __le__(self, other: Severity) -> bool:
         return self == other or self < other
 
-
-class FindingType(Enum):
-    SCHOLAR = "scholar"
-    THEORY = "theory"
-    INSTITUTION = "institution"
-    PUBLICATION = "publication"
-    SCHOOL = "school"
-    EVIDENCE = "evidence"
-    METHOD = "method"
-    EVENT = "event"
-    OTHER = "other"
+    @property
+    def weight(self) -> int:
+        """Numeric weight for coverage calculations."""
+        return {
+            Severity.LOW: 1, Severity.MEDIUM: 2,
+            Severity.HIGH: 3, Severity.CRITICAL: 5,
+        }[self]
 
 
-class PostulateStatus(Enum):
-    UNCONFIRMED = "unconfirmed"
-    CONFIRMED = "confirmed"
-    REFUTED = "refuted"
-
-
-class AnomalyType(Enum):
-    LANGUAGE_GAP = "language_gap"
-    THEORY_GAP = "theory_gap"
+class GapType(Enum):
+    """Types of epistemic gaps — used in both expectations and anomalies."""
+    # Core gap types (from founder's v2 engine)
+    LINGUISTIC = "linguistic"
+    INSTITUTIONAL = "institutional"
+    VOICE = "voice"
+    SOURCE_TYPE = "source_type"
+    ENTITY_UNRESEARCHED = "entity"
+    THEORY_UNSOURCED = "theory"
+    TEMPORAL = "temporal"
+    GEOGRAPHIC = "geographic"
+    # Additional gap types (from analysis modules)
     DISCIPLINE_GAP = "discipline_gap"
-    INSTITUTION_GAP = "institution_gap"
     SCHOOL_GAP = "school_gap"
-    PUBLICATION_GAP = "publication_gap"
-    TEMPORAL_GAP = "temporal_gap"
     CITATION_ISLAND = "citation_island"
     CONVERGENCE_EXCESS = "convergence_excess"
     DIVERGENCE_EXCESS = "divergence_excess"
@@ -61,7 +66,23 @@ class AnomalyType(Enum):
     EMPTY_QUERY_PATTERN = "empty_query_pattern"
 
 
+class EntityType(Enum):
+    """Classification of discovered entities."""
+    SCHOLAR = "scholar"
+    INSTITUTION = "institution"
+    THEORY = "theory"
+    HISTORICAL_FIGURE = "historical_figure"
+    ANCIENT_SOURCE = "ancient_source"
+    SITE = "site"
+    PUBLICATION = "publication"
+    EVIDENCE = "evidence"
+    METHOD = "method"
+    EVENT = "event"
+    UNKNOWN = "unknown"
+
+
 class QueryLanguage(Enum):
+    """Supported query languages."""
     ENGLISH = "en"
     GREEK = "el"
     FRENCH = "fr"
@@ -79,173 +100,246 @@ class QueryLanguage(Enum):
 # ---------------------------------------------------------------------------
 
 @dataclass
-class Finding:
-    """A discovered entity — scholar, theory, institution, etc."""
+class Entity:
+    """A tracked entity discovered during research.
+
+    Entities grow: mention count increases, investigation status updates,
+    and languages-seen-in expands as more findings reference them.
+    """
     name: str
-    finding_type: FindingType
-    source_query: str = ""
-    description: str = ""
-    language: QueryLanguage = QueryLanguage.ENGLISH
-    citations: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    entity_type: EntityType
+    first_seen_in: str = ""
+    times_mentioned: int = 1
+    investigated: bool = False
+    languages_seen_in: set = field(default_factory=set)
+    affiliated_institution: str = ""
 
     def __hash__(self) -> int:
-        return hash((self.name.lower().strip(), self.finding_type))
+        return hash(self.name.lower())
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Entity):
+            return NotImplemented
+        return self.name.lower() == other.name.lower()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "entity_type": self.entity_type.value,
+            "times_mentioned": self.times_mentioned,
+            "investigated": self.investigated,
+            "languages_seen_in": sorted(self.languages_seen_in),
+            "affiliated_institution": self.affiliated_institution,
+        }
+
+
+@dataclass
+class Expectation:
+    """A derived expectation about what knowledge should exist.
+
+    Generated by the DynamicInferenceEngine each cycle. Expectations
+    are satisfied (or not) by matching findings against them.
+    """
+    description: str
+    gap_type: GapType
+    severity_if_unmet: Severity
+    met: bool = False
+    evidence: str = ""
+    derived_in_cycle: int = 0
+
+    def satisfy(self, evidence: str) -> None:
+        self.met = True
+        self.evidence = evidence
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "description": self.description,
+            "gap_type": self.gap_type.value,
+            "severity": self.severity_if_unmet.value,
+            "met": self.met,
+            "evidence": self.evidence,
+            "derived_in_cycle": self.derived_in_cycle,
+        }
+
+
+@dataclass
+class Finding:
+    """A research finding from a search query.
+
+    Rich metadata: author, institution, theory supported, year,
+    source type, and mentioned entities enable deep analysis.
+    """
+    source: str
+    language: str
+    author: str = ""
+    institution: str = ""
+    theory_supported: str = ""
+    source_type: str = ""
+    year: int = 0
+    entities_mentioned: list = field(default_factory=list)
+    search_query_used: str = ""
+    cycle: int = 0
+
+    def __hash__(self) -> int:
+        return hash((self.source.lower().strip(), self.language))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Finding):
             return NotImplemented
         return (
-            self.name.lower().strip() == other.name.lower().strip()
-            and self.finding_type == other.finding_type
+            self.source.lower().strip() == other.source.lower().strip()
+            and self.language == other.language
         )
 
+    def __repr__(self) -> str:
+        year_str = f" ({self.year})" if self.year else ""
+        return f"[{self.language}] {self.source}{year_str}"
 
-@dataclass
-class Postulate:
-    """A dynamic assertion about what knowledge should exist."""
-    id: str
-    description: str
-    meta_axiom_id: str
-    status: PostulateStatus = PostulateStatus.UNCONFIRMED
-    confirming_findings: list[str] = field(default_factory=list)
-    generated_at_cycle: int = 0
-
-    def confirm(self, finding_name: str) -> None:
-        self.status = PostulateStatus.CONFIRMED
-        if finding_name not in self.confirming_findings:
-            self.confirming_findings.append(finding_name)
-
-    def refute(self, reason: str = "") -> None:
-        self.status = PostulateStatus.REFUTED
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source": self.source,
+            "language": self.language,
+            "author": self.author,
+            "institution": self.institution,
+            "theory_supported": self.theory_supported,
+            "source_type": self.source_type,
+            "year": self.year,
+            "entities_mentioned": self.entities_mentioned,
+            "cycle": self.cycle,
+        }
 
 
 @dataclass
 class Anomaly:
-    """A gap between expectation and reality."""
-    id: str
-    anomaly_type: AnomalyType
-    severity: Severity
+    """A gap between expectation and reality.
+
+    Each anomaly has a gap type, severity, human-readable recommendation,
+    and suggested queries to fill the gap.
+    """
     description: str
-    suggested_queries: list[str] = field(default_factory=list)
-    related_postulate_id: str = ""
+    gap_type: GapType
+    severity: Severity
+    recommendation: str = ""
+    suggested_queries: list = field(default_factory=list)
     detected_at_cycle: int = 0
-    resolved: bool = False
 
     def __hash__(self) -> int:
-        return hash((self.anomaly_type, self.description.lower().strip()))
+        return hash((self.gap_type, self.description.lower().strip()))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Anomaly):
             return NotImplemented
         return (
-            self.anomaly_type == other.anomaly_type
+            self.gap_type == other.gap_type
             and self.description.lower().strip() == other.description.lower().strip()
         )
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "description": self.description,
+            "gap_type": self.gap_type.value,
+            "severity": self.severity.value,
+            "recommendation": self.recommendation,
+            "suggested_queries": self.suggested_queries,
+            "detected_at_cycle": self.detected_at_cycle,
+        }
+
 
 @dataclass
-class Query:
+class SearchQuery:
     """A search query to execute."""
-    text: str
-    language: QueryLanguage = QueryLanguage.ENGLISH
-    priority: float = 1.0
+    query: str
+    language: str
+    rationale: str = ""
+    priority: Severity = Severity.MEDIUM
+    target_gap: GapType = GapType.LINGUISTIC
     executed: bool = False
-    result_count: int = 0
-    source_anomaly_id: str = ""
-    cycle: int = 0
-
-
-@dataclass
-class CoverageScore:
-    """Coverage is always a lower bound — we can never be sure we found everything."""
-    confirmed: int
-    total: int
-    anomaly_count: int = 0
-    cycle: int = 0
-
-    @property
-    def percentage(self) -> float:
-        if self.total == 0:
-            return 0.0
-        return round((self.confirmed / self.total) * 100, 1)
 
     def __repr__(self) -> str:
-        return (
-            f"CoverageScore({self.confirmed}/{self.total} = {self.percentage}%, "
-            f"anomalies={self.anomaly_count}, cycle={self.cycle})"
-        )
+        mark = "\u2713" if self.executed else "\u25cb"
+        return f"[{mark}] [{self.language}] {self.query}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "query": self.query,
+            "language": self.language,
+            "rationale": self.rationale,
+            "priority": self.priority.value,
+            "target_gap": self.target_gap.value,
+            "executed": self.executed,
+        }
 
 
 @dataclass
-class ResearchState:
-    """Complete audit state container."""
-    topic: str
-    country: str
-    discipline: str
-    findings: list[Finding] = field(default_factory=list)
-    postulates: list[Postulate] = field(default_factory=list)
-    anomalies: list[Anomaly] = field(default_factory=list)
-    queries: list[Query] = field(default_factory=list)
-    coverage_history: list[CoverageScore] = field(default_factory=list)
-    current_cycle: int = 0
-
-    @property
-    def unique_findings(self) -> set[Finding]:
-        return set(self.findings)
-
-    @property
-    def unresolved_anomalies(self) -> list[Anomaly]:
-        return [a for a in self.anomalies if not a.resolved]
-
-    @property
-    def confirmed_postulates(self) -> list[Postulate]:
-        return [p for p in self.postulates if p.status == PostulateStatus.CONFIRMED]
-
-    @property
-    def unconfirmed_postulates(self) -> list[Postulate]:
-        return [p for p in self.postulates if p.status == PostulateStatus.UNCONFIRMED]
-
-    def add_finding(self, finding: Finding) -> bool:
-        """Add a finding, returning True if it's new (not a duplicate)."""
-        if finding in self.findings:
-            return False
-        self.findings.append(finding)
-        return True
-
-    def add_anomaly(self, anomaly: Anomaly) -> bool:
-        """Add an anomaly, returning True if it's new."""
-        if anomaly in self.anomalies:
-            return False
-        self.anomalies.append(anomaly)
-        return True
-
-    def current_coverage(self) -> CoverageScore:
-        total = len(self.postulates)
-        confirmed = len(self.confirmed_postulates)
-        anomaly_count = len(self.unresolved_anomalies)
-        return CoverageScore(
-            confirmed=confirmed,
-            total=total,
-            anomaly_count=anomaly_count,
-            cycle=self.current_cycle,
-        )
+class CycleSnapshot:
+    """State of the system at end of a cycle."""
+    cycle: int
+    n_postulate_scholars: int
+    n_postulate_theories: int
+    n_postulate_institutions: int
+    n_expectations: int
+    n_expectations_met: int
+    n_findings: int
+    n_anomalies: int
+    coverage_score: float
+    new_entities_discovered: list = field(default_factory=list)
+    queries_generated: int = 0
 
     def to_dict(self) -> dict[str, Any]:
-        coverage = self.current_coverage()
         return {
-            "topic": self.topic,
-            "country": self.country,
-            "discipline": self.discipline,
-            "cycle": self.current_cycle,
-            "coverage_percentage": coverage.percentage,
-            "confirmed_postulates": coverage.confirmed,
-            "total_postulates": coverage.total,
-            "total_findings": len(self.unique_findings),
-            "total_anomalies": len(self.anomalies),
-            "unresolved_anomalies": len(self.unresolved_anomalies),
-            "coverage_history": [
-                {"cycle": c.cycle, "percentage": c.percentage}
-                for c in self.coverage_history
-            ],
+            "cycle": self.cycle,
+            "percentage": self.coverage_score,
+            "confirmed": self.n_expectations_met,
+            "total": self.n_expectations,
+            "findings": self.n_findings,
+            "anomalies": self.n_anomalies,
+            "new_entities": self.new_entities_discovered,
+            "queries_generated": self.queries_generated,
+        }
+
+
+@dataclass
+class AgentReport:
+    """Result of a single agent's audit."""
+    agent_name: str
+    agent_focus: str
+    expectations: list[Expectation] = field(default_factory=list)
+    anomalies: list[Anomaly] = field(default_factory=list)
+    coverage_score: float = 0.0
+
+    @property
+    def anomaly_signatures(self) -> set[str]:
+        """Normalized signatures for cross-agent comparison."""
+        return {
+            f"{a.gap_type.value}:{a.severity.value}:{a.description[:80]}"
+            for a in self.anomalies
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "agent_name": self.agent_name,
+            "agent_focus": self.agent_focus,
+            "coverage": self.coverage_score,
+            "findings": len(self.expectations),
+            "anomalies": len(self.anomalies),
+            "anomaly_details": [a.to_dict() for a in self.anomalies],
+        }
+
+
+@dataclass
+class Discrepancy:
+    """A gap found by one agent but missed by another."""
+    anomaly: Anomaly
+    found_by: str
+    missed_by: str
+    significance: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "description": self.anomaly.description,
+            "gap_type": self.anomaly.gap_type.value,
+            "severity": self.anomaly.severity.value,
+            "found_by": self.found_by,
+            "missed_by": self.missed_by,
+            "significance": self.significance,
         }

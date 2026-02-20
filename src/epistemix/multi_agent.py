@@ -1,326 +1,613 @@
 """Dual-agent epistemic audit system.
 
-Two agents with different axiom weightings independently audit the same topic:
-- Agent α (institutional): weights languages, institutions, schools, publications
-- Agent β (theoretical): weights theories, disciplines, temporal evolution
+Based on the founder's v2 design with separate agent classes:
+  - AgentInstitutional (Alpha): institutions, traditions, geographic coverage
+  - AgentTheoretical (Beta): theories, evidence, argumentation
+  - Arbiter: compares reports, finds discrepancies (known unknowns)
 
-An Arbiter compares their reports, identifies agreements and discrepancies,
-and promotes disagreements to "known unknowns" — areas where our epistemic
-coverage is provably incomplete.
+Each agent independently derives expectations, satisfies them from findings,
+detects anomalies, and produces a coverage score. The Arbiter then compares
+the two reports: where they DISAGREE reveals blind spots that no single
+perspective would catch.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from typing import Any
 
-from epistemix.connector import BaseConnector
-from epistemix.core import EpistemicEngine
-from epistemix.meta_axioms import META_AXIOMS
 from epistemix.models import (
+    AgentReport,
     Anomaly,
-    AnomalyType,
-    CoverageScore,
+    Discrepancy,
+    Expectation,
     Finding,
-    Postulate,
-    PostulateStatus,
-    ResearchState,
+    GapType,
     Severity,
 )
+from epistemix.core import DynamicPostulates
+from epistemix.knowledge import GEOGRAPHIC_LINGUISTIC
 
 
-@dataclass(frozen=True)
-class AgentPerspective:
-    """Axiom weighting configuration for an agent."""
-    name: str
-    description: str
-    # meta_axiom_id → weight (0.0 to 2.0, default 1.0)
-    weights: dict[str, float] = field(default_factory=dict)
+# ============================================================
+# AGENT ALPHA — INSTITUTIONAL
+# ============================================================
 
-    def weight_for(self, axiom_id: str) -> float:
-        return self.weights.get(axiom_id, 1.0)
+class AgentInstitutional:
+    """Agent Alpha: focuses on institutions, traditions, geographic coverage.
 
-
-# Pre-defined perspectives
-ALPHA_PERSPECTIVE = AgentPerspective(
-    name="alpha",
-    description="Institutional focus: languages, institutions, schools, publications",
-    weights={
-        "MA-01": 1.5,  # Language — high weight
-        "MA-02": 1.5,  # Institution — high weight
-        "MA-03": 0.7,  # Theory — lower
-        "MA-04": 1.5,  # School — high weight
-        "MA-05": 0.7,  # Discipline — lower
-        "MA-06": 1.5,  # Publication — high weight
-        "MA-07": 0.7,  # Temporal — lower
-    },
-)
-
-BETA_PERSPECTIVE = AgentPerspective(
-    name="beta",
-    description="Theoretical focus: theories, disciplines, temporal evolution",
-    weights={
-        "MA-01": 0.7,  # Language — lower
-        "MA-02": 0.7,  # Institution — lower
-        "MA-03": 1.5,  # Theory — high weight
-        "MA-04": 0.7,  # School — lower
-        "MA-05": 1.5,  # Discipline — high weight
-        "MA-06": 0.7,  # Publication — lower
-        "MA-07": 1.5,  # Temporal — high weight
-    },
-)
-
-
-@dataclass
-class AgentReport:
-    """Report from a single agent's audit."""
-    agent_name: str
-    perspective: AgentPerspective
-    coverage: CoverageScore
-    findings: list[Finding] = field(default_factory=list)
-    postulates: list[Postulate] = field(default_factory=list)
-    anomalies: list[Anomaly] = field(default_factory=list)
-    coverage_history: list[CoverageScore] = field(default_factory=list)
-
-
-@dataclass
-class EpistemicAgent:
-    """An agent that runs the audit with a specific perspective weighting."""
-
-    perspective: AgentPerspective
-    engine: EpistemicEngine
-
-    @classmethod
-    def create(
-        cls,
-        perspective: AgentPerspective,
-        connector: BaseConnector,
-        topic: str,
-        country: str,
-        discipline: str,
-    ) -> EpistemicAgent:
-        state = ResearchState(topic=topic, country=country, discipline=discipline)
-        engine = EpistemicEngine(connector=connector, state=state)
-        return cls(perspective=perspective, engine=engine)
-
-    def run(self, max_cycles: int = 4) -> AgentReport:
-        """Run the full audit and return a report."""
-        coverage_history = self.engine.run_all_cycles(max_cycles=max_cycles)
-
-        # Apply perspective weighting to anomaly severity
-        self._weight_anomalies()
-
-        return AgentReport(
-            agent_name=self.perspective.name,
-            perspective=self.perspective,
-            coverage=self.engine.state.current_coverage(),
-            findings=list(self.engine.state.findings),
-            postulates=list(self.engine.state.postulates),
-            anomalies=list(self.engine.state.anomalies),
-            coverage_history=coverage_history,
-        )
-
-    def _weight_anomalies(self) -> None:
-        """Adjust anomaly significance based on perspective weights.
-
-        Anomalies from highly weighted axioms get promoted in severity.
-        Anomalies from low-weighted axioms remain but aren't promoted.
-        """
-        axiom_type_map: dict[AnomalyType, str] = {
-            AnomalyType.LANGUAGE_GAP: "MA-01",
-            AnomalyType.INSTITUTION_GAP: "MA-02",
-            AnomalyType.THEORY_GAP: "MA-03",
-            AnomalyType.SCHOOL_GAP: "MA-04",
-            AnomalyType.DISCIPLINE_GAP: "MA-05",
-            AnomalyType.PUBLICATION_GAP: "MA-06",
-            AnomalyType.TEMPORAL_GAP: "MA-07",
-        }
-
-        for anomaly in self.engine.state.anomalies:
-            axiom_id = axiom_type_map.get(anomaly.anomaly_type)
-            if axiom_id:
-                weight = self.perspective.weight_for(axiom_id)
-                if weight >= 1.5 and anomaly.severity == Severity.MEDIUM:
-                    anomaly.severity = Severity.HIGH
-
-
-@dataclass
-class ArbiterResult:
-    """Result of the arbiter's comparison of two agent reports."""
-    agreements: list[str] = field(default_factory=list)
-    discrepancies: list[str] = field(default_factory=list)
-    known_unknowns: list[Anomaly] = field(default_factory=list)
-    combined_coverage: CoverageScore | None = None
-    blindness_gap: float = 0.0
-
-
-class Arbiter:
-    """Compares two agent reports and identifies epistemic blind spots.
-
-    The arbiter's job is to find where the agents disagree — those
-    disagreements represent genuine epistemic uncertainty, not just
-    missing data.
+    Blind spots by design: cannot detect theories with weak evidence
+    or single advocates.
     """
 
-    def compare(self, alpha: AgentReport, beta: AgentReport) -> ArbiterResult:
-        result = ArbiterResult()
+    NAME = "Agent \u03b1 (Institutional)"
+    FOCUS = "institutions, traditions, geographic coverage"
 
-        # Compare findings
-        alpha_findings = set(alpha.findings)
-        beta_findings = set(beta.findings)
-        shared = alpha_findings & beta_findings
-        alpha_only = alpha_findings - beta_findings
-        beta_only = beta_findings - alpha_findings
+    def __init__(self, postulates: DynamicPostulates) -> None:
+        self.postulates = postulates
 
-        result.agreements.append(
-            f"{len(shared)} findings agreed upon by both agents"
-        )
-        if alpha_only:
-            result.discrepancies.append(
-                f"Agent α found {len(alpha_only)} entities not found by β: "
-                f"{', '.join(f.name for f in sorted(alpha_only, key=lambda x: x.name)[:5])}"
-            )
-        if beta_only:
-            result.discrepancies.append(
-                f"Agent β found {len(beta_only)} entities not found by α: "
-                f"{', '.join(f.name for f in sorted(beta_only, key=lambda x: x.name)[:5])}"
-            )
-
-        # Compare anomalies
-        alpha_anomaly_types = {a.anomaly_type for a in alpha.anomalies}
-        beta_anomaly_types = {a.anomaly_type for a in beta.anomalies}
-        shared_types = alpha_anomaly_types & beta_anomaly_types
-        alpha_only_types = alpha_anomaly_types - beta_anomaly_types
-        beta_only_types = beta_anomaly_types - alpha_anomaly_types
-
-        if shared_types:
-            result.agreements.append(
-                f"Both agents flagged: {', '.join(t.value for t in shared_types)}"
-            )
-
-        # Discrepancies in anomaly detection become known unknowns
-        for anomaly in beta.anomalies:
-            if anomaly.anomaly_type in beta_only_types:
-                known_unknown = Anomaly(
-                    id=f"A-KU-{anomaly.id}",
-                    anomaly_type=anomaly.anomaly_type,
-                    severity=Severity.HIGH,
-                    description=(
-                        f"[Known Unknown] Agent β detected but α missed: "
-                        f"{anomaly.description}"
-                    ),
-                    suggested_queries=anomaly.suggested_queries,
-                )
-                result.known_unknowns.append(known_unknown)
-
-        for anomaly in alpha.anomalies:
-            if anomaly.anomaly_type in alpha_only_types:
-                known_unknown = Anomaly(
-                    id=f"A-KU-{anomaly.id}",
-                    anomaly_type=anomaly.anomaly_type,
-                    severity=Severity.HIGH,
-                    description=(
-                        f"[Known Unknown] Agent α detected but β missed: "
-                        f"{anomaly.description}"
-                    ),
-                    suggested_queries=anomaly.suggested_queries,
-                )
-                result.known_unknowns.append(known_unknown)
-
-        # Combined coverage = min(α, β)
-        alpha_pct = alpha.coverage.percentage
-        beta_pct = beta.coverage.percentage
-        min_pct = min(alpha_pct, beta_pct)
-
-        combined_total = max(alpha.coverage.total, beta.coverage.total)
-        combined_confirmed = int(combined_total * min_pct / 100) if combined_total > 0 else 0
-        total_anomalies = len(set(alpha.anomalies) | set(beta.anomalies))
-
-        result.combined_coverage = CoverageScore(
-            confirmed=combined_confirmed,
-            total=combined_total,
-            anomaly_count=total_anomalies,
+    def audit(self, findings: list[Finding]) -> AgentReport:
+        """Run the institutional audit."""
+        report = AgentReport(
+            agent_name=self.NAME,
+            agent_focus=self.FOCUS,
         )
 
-        # Blindness gap = difference between best single-agent and combined
-        max_single = max(alpha_pct, beta_pct)
-        result.blindness_gap = round(max_single - min_pct, 1)
+        report.expectations = self._derive_expectations(findings)
+        self._satisfy(report.expectations, findings)
+        report.anomalies = self._find_anomalies(findings)
+        report.coverage_score = self._score(report)
+        return report
 
-        return result
+    def _derive_expectations(self, findings: list[Finding]) -> list[Expectation]:
+        """Derive institutional expectations."""
+        expectations: list[Expectation] = []
+
+        # One expectation per institution found
+        institutions: set[str] = set()
+        for f in findings:
+            if f.institution:
+                institutions.add(f.institution)
+            for entity in f.entities_mentioned:
+                lower = entity.lower()
+                for kw in ("university", "museum", "ministry", "institute", "school"):
+                    if kw in lower:
+                        institutions.add(entity)
+                        break
+
+        for inst in institutions:
+            expectations.append(Expectation(
+                description=f"Publications from '{inst}' reviewed",
+                gap_type=GapType.INSTITUTIONAL,
+                severity_if_unmet=Severity.MEDIUM,
+            ))
+
+        # Geographic-linguistic completeness
+        geo = GEOGRAPHIC_LINGUISTIC.get(self.postulates.country, {})
+        for lang in geo.get("primary_languages", []):
+            expectations.append(Expectation(
+                description=f"Sources in '{lang}' language found",
+                gap_type=GapType.LINGUISTIC,
+                severity_if_unmet=Severity.HIGH,
+            ))
+        for lang, tradition in geo.get("foreign_traditions", {}).items():
+            expectations.append(Expectation(
+                description=f"Sources from {tradition} ({lang}) checked",
+                gap_type=GapType.INSTITUTIONAL,
+                severity_if_unmet=Severity.MEDIUM,
+            ))
+
+        # Diversity expectations
+        expectations.append(Expectation(
+            description="Scholars from at least 2 different institutions",
+            gap_type=GapType.INSTITUTIONAL,
+            severity_if_unmet=Severity.MEDIUM,
+        ))
+        expectations.append(Expectation(
+            description="At least 3 distinct institutions represented",
+            gap_type=GapType.INSTITUTIONAL,
+            severity_if_unmet=Severity.MEDIUM,
+        ))
+
+        return expectations
+
+    def _satisfy(
+        self, expectations: list[Expectation], findings: list[Finding]
+    ) -> None:
+        """Check which expectations are met."""
+        langs = set(f.language for f in findings)
+        institutions = set(
+            f.institution.lower() for f in findings if f.institution
+        )
+
+        for exp in expectations:
+            desc_lower = exp.description.lower()
+
+            # Language match
+            for lang in langs:
+                if f"'{lang}'" in desc_lower:
+                    exp.satisfy(f"Found sources in {lang}")
+                    break
+
+            if exp.met:
+                continue
+
+            # Institution match
+            for inst in institutions:
+                if inst in desc_lower:
+                    exp.satisfy(f"Found publications from {inst}")
+                    break
+
+            if exp.met:
+                continue
+
+            # Diversity: "3 distinct"
+            if "3 distinct" in desc_lower and len(institutions) >= 3:
+                exp.satisfy(f"{len(institutions)} institutions found")
+
+            # Diversity: "2 different"
+            if "2 different" in desc_lower and len(institutions) >= 2:
+                exp.satisfy(f"{len(institutions)} institutions found")
+
+    def _find_anomalies(self, findings: list[Finding]) -> list[Anomaly]:
+        """Detect institutional anomalies."""
+        anomalies: list[Anomaly] = []
+
+        # Institutional concentration
+        if len(findings) >= 4:
+            inst_counts: dict[str, int] = {}
+            for f in findings:
+                if f.institution:
+                    key = f.institution.lower()
+                    inst_counts[key] = inst_counts.get(key, 0) + 1
+
+            for inst, count in inst_counts.items():
+                if count / len(findings) > 0.5:
+                    anomalies.append(Anomaly(
+                        description=(
+                            f"Institutional concentration: '{inst}' "
+                            f"accounts for {count}/{len(findings)} findings"
+                        ),
+                        gap_type=GapType.INSTITUTIONAL,
+                        severity=Severity.MEDIUM,
+                        recommendation="Search for findings from other institutions",
+                    ))
+
+        # Geographic clustering
+        if len(findings) >= 5:
+            countries: set[str] = set()
+            for f in findings:
+                inst_lower = (f.institution or "").lower()
+                if any(kw in inst_lower for kw in ("greece", "greek", "hellenic")):
+                    countries.add("Greece")
+                elif any(kw in inst_lower for kw in ("british", "oxford", "cambridge", "london")):
+                    countries.add("Anglophone")
+                elif any(kw in inst_lower for kw in ("french", "france", "paris")):
+                    countries.add("France")
+                elif any(kw in inst_lower for kw in ("german", "deutsch")):
+                    countries.add("Germany")
+                elif any(kw in inst_lower for kw in ("italian", "italia", "rome", "roma")):
+                    countries.add("Italy")
+                elif f.institution:
+                    countries.add("Other")
+
+            if len(countries) <= 1 and countries:
+                anomalies.append(Anomaly(
+                    description=(
+                        f"Geographic clustering: all findings from "
+                        f"{next(iter(countries))} academic tradition"
+                    ),
+                    gap_type=GapType.GEOGRAPHIC,
+                    severity=Severity.HIGH,
+                    recommendation="Search for findings from other academic traditions",
+                ))
+
+        return anomalies
+
+    def _score(self, report: AgentReport) -> float:
+        """Calculate coverage score."""
+        total = len(report.expectations)
+        if total == 0:
+            return 0.0
+        met = sum(1 for e in report.expectations if e.met)
+        score = (met / total) * 100 - (len(report.anomalies) * 5)
+        return max(score, 0.0)
 
 
-@dataclass
+# ============================================================
+# AGENT BETA — THEORETICAL
+# ============================================================
+
+class AgentTheoretical:
+    """Agent Beta: focuses on theories, evidence, argumentation.
+
+    Blind spots by design: cannot detect institutional monoculture
+    or geographic bias.
+    """
+
+    NAME = "Agent \u03b2 (Theoretical)"
+    FOCUS = "theories, evidence, argumentation"
+
+    def __init__(self, postulates: DynamicPostulates) -> None:
+        self.postulates = postulates
+
+    def audit(self, findings: list[Finding]) -> AgentReport:
+        """Run the theoretical audit."""
+        report = AgentReport(
+            agent_name=self.NAME,
+            agent_focus=self.FOCUS,
+        )
+
+        report.expectations = self._derive_expectations(findings)
+        self._satisfy(report.expectations, findings)
+        report.anomalies = self._find_anomalies(findings)
+        report.coverage_score = self._score(report)
+        return report
+
+    def _derive_expectations(self, findings: list[Finding]) -> list[Expectation]:
+        """Derive theoretical expectations."""
+        expectations: list[Expectation] = []
+
+        # Peer-reviewed source per theory
+        theories: set[str] = set()
+        for f in findings:
+            if f.theory_supported:
+                theories.add(f.theory_supported)
+
+        for theory in theories:
+            expectations.append(Expectation(
+                description=f"Peer-reviewed source for theory: {theory}",
+                gap_type=GapType.THEORY_UNSOURCED,
+                severity_if_unmet=Severity.HIGH,
+            ))
+            # Counter-argument for each theory
+            expectations.append(Expectation(
+                description=f"Counter-argument or critique for theory: {theory}",
+                gap_type=GapType.VOICE,
+                severity_if_unmet=Severity.MEDIUM,
+            ))
+
+        # Evidence type diversity
+        expectations.append(Expectation(
+            description="Archaeological evidence sources found",
+            gap_type=GapType.SOURCE_TYPE,
+            severity_if_unmet=Severity.MEDIUM,
+        ))
+        expectations.append(Expectation(
+            description="Historical/literary evidence sources found",
+            gap_type=GapType.SOURCE_TYPE,
+            severity_if_unmet=Severity.MEDIUM,
+        ))
+        expectations.append(Expectation(
+            description="Scientific/technical evidence sources found",
+            gap_type=GapType.SOURCE_TYPE,
+            severity_if_unmet=Severity.MEDIUM,
+        ))
+
+        # Comparative study
+        if len(theories) >= 2:
+            expectations.append(Expectation(
+                description="Comparative study reviewing multiple theories",
+                gap_type=GapType.SOURCE_TYPE,
+                severity_if_unmet=Severity.MEDIUM,
+            ))
+
+        return expectations
+
+    def _satisfy(
+        self, expectations: list[Expectation], findings: list[Finding]
+    ) -> None:
+        """Check which expectations are met."""
+        # Build lookup structures
+        peer_reviewed_theories: set[str] = set()
+        has_archaeological = False
+        has_historical = False
+        has_scientific = False
+        has_comparative = False
+
+        for f in findings:
+            text = f"{f.source} {f.theory_supported}".lower()
+            if f.theory_supported and f.source_type in (
+                "peer_reviewed", "peer-reviewed"
+            ):
+                peer_reviewed_theories.add(f.theory_supported.lower())
+
+            if any(kw in text for kw in (
+                "excavation", "artifact", "archaeological", "stratigraphy"
+            )):
+                has_archaeological = True
+            if any(kw in text for kw in (
+                "historical", "literary", "ancient source", "chronicle"
+            )):
+                has_historical = True
+            if any(kw in text for kw in (
+                "dna", "scientific", "laboratory", "isotope", "radiocarbon"
+            )):
+                has_scientific = True
+            if any(kw in text for kw in (
+                "comparative", "review", "synthesis", "meta-analysis"
+            )):
+                has_comparative = True
+
+        theories = set(
+            f.theory_supported.lower()
+            for f in findings if f.theory_supported
+        )
+
+        for exp in expectations:
+            if exp.met:
+                continue
+
+            desc_lower = exp.description.lower()
+
+            # Peer-reviewed match
+            if exp.gap_type == GapType.THEORY_UNSOURCED:
+                for theory in peer_reviewed_theories:
+                    theory_words = {w for w in theory.split() if len(w) > 4}
+                    desc_words = {w for w in desc_lower.split() if len(w) > 4}
+                    if theory_words & desc_words:
+                        exp.satisfy(f"Peer-reviewed source: {theory}")
+                        break
+
+            # Counter-argument: if a different theory exists, count it
+            elif exp.gap_type == GapType.VOICE and "counter-argument" in desc_lower:
+                for theory in theories:
+                    if theory not in desc_lower:
+                        exp.satisfy(
+                            f"Alternative theory exists: {theory}"
+                        )
+                        break
+
+            # Evidence types
+            elif exp.gap_type == GapType.SOURCE_TYPE:
+                if "archaeological" in desc_lower and has_archaeological:
+                    exp.satisfy("Archaeological evidence found")
+                elif "historical" in desc_lower and has_historical:
+                    exp.satisfy("Historical/literary evidence found")
+                elif "scientific" in desc_lower and has_scientific:
+                    exp.satisfy("Scientific/technical evidence found")
+                elif "comparative" in desc_lower and has_comparative:
+                    exp.satisfy("Comparative study found")
+
+    def _find_anomalies(self, findings: list[Finding]) -> list[Anomaly]:
+        """Detect theoretical anomalies."""
+        anomalies: list[Anomaly] = []
+
+        # Single-evidence theories
+        theory_types: dict[str, set[str]] = {}
+        for f in findings:
+            if f.theory_supported:
+                key = f.theory_supported.lower()
+                theory_types.setdefault(key, set())
+                if f.source_type:
+                    theory_types[key].add(f.source_type)
+
+        for theory, types in theory_types.items():
+            if len(types) == 1:
+                anomalies.append(Anomaly(
+                    description=(
+                        f"Single-evidence theory: '{theory}' supported "
+                        f"only by {next(iter(types))} sources"
+                    ),
+                    gap_type=GapType.SOURCE_TYPE,
+                    severity=Severity.MEDIUM,
+                    recommendation=(
+                        "Find additional evidence types for this theory"
+                    ),
+                ))
+
+        # Single-advocate theories
+        theory_authors: dict[str, set[str]] = {}
+        for f in findings:
+            if f.theory_supported and f.author:
+                key = f.theory_supported.lower()
+                theory_authors.setdefault(key, set()).add(f.author.lower())
+
+        for theory, authors in theory_authors.items():
+            if len(authors) == 1:
+                anomalies.append(Anomaly(
+                    description=(
+                        f"Single-advocate theory: '{theory}' supported "
+                        f"only by {next(iter(authors))}"
+                    ),
+                    gap_type=GapType.VOICE,
+                    severity=Severity.MEDIUM,
+                    recommendation="Find additional scholars supporting this theory",
+                ))
+
+        return anomalies
+
+    def _score(self, report: AgentReport) -> float:
+        """Calculate coverage score."""
+        total = len(report.expectations)
+        if total == 0:
+            return 0.0
+        met = sum(1 for e in report.expectations if e.met)
+        score = (met / total) * 100 - (len(report.anomalies) * 5)
+        return max(score, 0.0)
+
+
+# ============================================================
+# ARBITER
+# ============================================================
+
+class Arbiter:
+    """Compares two agent reports and identifies discrepancies.
+
+    Discrepancies = gaps found by one agent but missed by the other.
+    These are the most valuable output: proven blind spots.
+    """
+
+    def __init__(
+        self, report_alpha: AgentReport, report_beta: AgentReport
+    ) -> None:
+        self.alpha = report_alpha
+        self.beta = report_beta
+        self.discrepancies: list[Discrepancy] = []
+        self.combined_anomalies: list[Anomaly] = []
+
+    def compare(self) -> list[Discrepancy]:
+        """Compare reports and find discrepancies."""
+        self.discrepancies = []
+
+        # Alpha's anomalies not found by Beta
+        for anomaly in self.alpha.anomalies:
+            if not self._has_similar(anomaly, self.beta.anomalies):
+                self.discrepancies.append(Discrepancy(
+                    anomaly=anomaly,
+                    found_by=self.alpha.agent_name,
+                    missed_by=self.beta.agent_name,
+                    significance=(
+                        "Agent Beta's theoretical focus missed this "
+                        "institutional gap"
+                    ),
+                ))
+
+        # Beta's anomalies not found by Alpha
+        for anomaly in self.beta.anomalies:
+            if not self._has_similar(anomaly, self.alpha.anomalies):
+                self.discrepancies.append(Discrepancy(
+                    anomaly=anomaly,
+                    found_by=self.beta.agent_name,
+                    missed_by=self.alpha.agent_name,
+                    significance=(
+                        "Agent Alpha's institutional focus missed this "
+                        "theoretical gap"
+                    ),
+                ))
+
+        # Combined anomalies (deduplicated union)
+        seen: set[str] = set()
+        for anomaly in self.alpha.anomalies + self.beta.anomalies:
+            key = f"{anomaly.gap_type.value}:{anomaly.description[:60]}"
+            if key not in seen:
+                seen.add(key)
+                self.combined_anomalies.append(anomaly)
+
+        return self.discrepancies
+
+    def _has_similar(
+        self, anomaly: Anomaly, others: list[Anomaly]
+    ) -> bool:
+        """Check if a similar anomaly exists in the other list.
+
+        Two anomalies are similar if:
+        1. Same gap_type
+        2. Description shares >= 2 significant words (len > 4)
+        """
+        for other in others:
+            if anomaly.gap_type != other.gap_type:
+                continue
+            words_a = {
+                w for w in anomaly.description.lower().split()
+                if len(w) > 4
+            }
+            words_b = {
+                w for w in other.description.lower().split()
+                if len(w) > 4
+            }
+            if len(words_a & words_b) >= 2:
+                return True
+        return False
+
+    def combined_score(self) -> float:
+        """Combined coverage score with discrepancy penalty."""
+        avg = (self.alpha.coverage_score + self.beta.coverage_score) / 2
+        penalty = len(self.discrepancies) * 3
+        return max(avg - penalty, 0.0)
+
+    def report(self) -> str:
+        """Generate human-readable arbiter report."""
+        lines: list[str] = []
+        lines.append("=" * 60)
+        lines.append("MULTI-AGENT ARBITER REPORT")
+        lines.append("=" * 60)
+
+        # Per-agent summary
+        for agent in (self.alpha, self.beta):
+            met = sum(1 for e in agent.expectations if e.met)
+            total = len(agent.expectations)
+            lines.append(f"\n{agent.agent_name}")
+            lines.append(f"  Focus: {agent.agent_focus}")
+            lines.append(f"  Expectations: {met}/{total}")
+            lines.append(f"  Anomalies: {len(agent.anomalies)}")
+            lines.append(f"  Coverage: {agent.coverage_score:.1f}%")
+
+        # Discrepancies
+        lines.append(f"\n--- Discrepancies: {len(self.discrepancies)} ---")
+        if not self.discrepancies:
+            lines.append(
+                "  No discrepancies — either coverage is good or both "
+                "agents share the same blind spots."
+            )
+        else:
+            for d in self.discrepancies:
+                lines.append(
+                    f"  [{d.anomaly.severity.value.upper()}] "
+                    f"Found by {d.found_by}, missed by {d.missed_by}"
+                )
+                lines.append(f"    {d.anomaly.description[:80]}")
+                lines.append(f"    Significance: {d.significance}")
+
+        # Combined
+        lines.append(f"\n--- Combined Assessment ---")
+        lines.append(f"  Combined score: {self.combined_score():.1f}%")
+        lines.append(
+            f"  Total unique anomalies: {len(self.combined_anomalies)}"
+        )
+        lines.append(f"  Discrepancies: {len(self.discrepancies)}")
+
+        if self.discrepancies:
+            lines.append(
+                "\n  Discrepancies represent potential UNKNOWN UNKNOWNS "
+                "\u2014 gaps that neither agent alone would have fully "
+                "identified."
+            )
+
+        lines.append("=" * 60)
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for web API / database."""
+        return {
+            "alpha": self.alpha.to_dict(),
+            "beta": self.beta.to_dict(),
+            "combined": {
+                "coverage": self.combined_score(),
+                "blindness_gap": abs(
+                    self.alpha.coverage_score - self.beta.coverage_score
+                ),
+                "total_anomalies": len(self.combined_anomalies),
+                "known_unknowns": len(self.discrepancies),
+            },
+            "discrepancies": [d.to_dict() for d in self.discrepancies],
+            "combined_anomalies": [
+                a.to_dict() for a in self.combined_anomalies
+            ],
+        }
+
+
+# ============================================================
+# MULTI-AGENT SYSTEM
+# ============================================================
+
 class MultiAgentSystem:
     """Orchestrates the full dual-agent audit."""
 
-    connector: BaseConnector
-    topic: str
-    country: str
-    discipline: str
-    max_cycles: int = 4
+    def __init__(self, postulates: DynamicPostulates) -> None:
+        self.postulates = postulates
 
-    def run(self) -> dict:
-        """Run both agents and the arbiter, returning the complete result."""
-        # Create and run Agent α
-        agent_alpha = EpistemicAgent.create(
-            perspective=ALPHA_PERSPECTIVE,
-            connector=self.connector,
-            topic=self.topic,
-            country=self.country,
-            discipline=self.discipline,
-        )
-        alpha_report = agent_alpha.run(max_cycles=self.max_cycles)
+    def run(self, findings: list[Finding]) -> dict[str, Any]:
+        """Run both agents and the arbiter.
 
-        # Create and run Agent β
-        agent_beta = EpistemicAgent.create(
-            perspective=BETA_PERSPECTIVE,
-            connector=self.connector,
-            topic=self.topic,
-            country=self.country,
-            discipline=self.discipline,
-        )
-        beta_report = agent_beta.run(max_cycles=self.max_cycles)
+        Returns the full arbiter result dict.
+        """
+        alpha = AgentInstitutional(self.postulates)
+        beta = AgentTheoretical(self.postulates)
 
-        # Arbiter comparison
-        arbiter = Arbiter()
-        arbiter_result = arbiter.compare(alpha_report, beta_report)
+        report_alpha = alpha.audit(findings)
+        report_beta = beta.audit(findings)
 
-        return {
-            "alpha": {
-                "coverage": alpha_report.coverage.percentage,
-                "findings": len(alpha_report.findings),
-                "anomalies": len(alpha_report.anomalies),
-                "coverage_history": [
-                    {"cycle": c.cycle, "percentage": c.percentage}
-                    for c in alpha_report.coverage_history
-                ],
-            },
-            "beta": {
-                "coverage": beta_report.coverage.percentage,
-                "findings": len(beta_report.findings),
-                "anomalies": len(beta_report.anomalies),
-                "coverage_history": [
-                    {"cycle": c.cycle, "percentage": c.percentage}
-                    for c in beta_report.coverage_history
-                ],
-            },
-            "combined": {
-                "coverage": arbiter_result.combined_coverage.percentage
-                if arbiter_result.combined_coverage
-                else 0,
-                "blindness_gap": arbiter_result.blindness_gap,
-                "total_anomalies": arbiter_result.combined_coverage.anomaly_count
-                if arbiter_result.combined_coverage
-                else 0,
-                "known_unknowns": len(arbiter_result.known_unknowns),
-            },
-            "agreements": arbiter_result.agreements,
-            "discrepancies": arbiter_result.discrepancies,
-            "known_unknowns": [
-                {
-                    "type": ku.anomaly_type.value,
-                    "severity": ku.severity.value,
-                    "description": ku.description,
-                }
-                for ku in arbiter_result.known_unknowns
-            ],
-        }
+        arbiter = Arbiter(report_alpha, report_beta)
+        arbiter.compare()
+
+        return arbiter.to_dict()

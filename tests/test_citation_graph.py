@@ -1,119 +1,129 @@
 """Tests for citation graph analysis."""
 
 from epistemix.citation_graph import CitationGraph
-from epistemix.models import (
-    AnomalyType,
-    Finding,
-    FindingType,
-    QueryLanguage,
-    Severity,
-)
-
-
-def _scholar(name: str, citations: list[str] | None = None, query: str = "test") -> Finding:
-    return Finding(
-        name=name,
-        finding_type=FindingType.SCHOLAR,
-        source_query=query,
-        citations=citations or [],
-    )
+from epistemix.models import Finding, GapType
 
 
 class TestCitationGraph:
-    def test_add_finding(self):
-        g = CitationGraph()
-        g.add_finding(_scholar("Alice", ["Bob", "Carol"]))
-        assert g.node_count == 3
-        assert g.in_degree("Bob") == 1
-        assert g.in_degree("Carol") == 1
-        assert g.out_degree("Alice") == 2
+    def test_build_from_findings(self, sample_findings):
+        graph = CitationGraph()
+        graph.build_from_findings(sample_findings)
+        assert len(graph.nodes) > 0
+        assert len(graph.edges) > 0
 
-    def test_detect_schools_two_components(self):
-        g = CitationGraph()
-        # School 1: Alice ↔ Bob
-        g.add_finding(_scholar("Alice", ["Bob"]))
-        g.add_finding(_scholar("Bob", ["Alice"]))
-        # School 2: Carol ↔ Dave
-        g.add_finding(_scholar("Carol", ["Dave"]))
-        g.add_finding(_scholar("Dave", ["Carol"]))
-        schools = g.detect_schools()
-        assert len(schools) == 2
+    def test_author_marked_investigated(self, sample_findings):
+        graph = CitationGraph()
+        graph.build_from_findings(sample_findings)
+        assert graph.nodes["alice"].investigated is True
+        assert graph.nodes["bob"].investigated is True
 
-    def test_detect_schools_single_component(self):
-        g = CitationGraph()
-        g.add_finding(_scholar("Alice", ["Bob"]))
-        g.add_finding(_scholar("Bob", ["Carol"]))
-        g.add_finding(_scholar("Carol", ["Alice"]))
-        schools = g.detect_schools()
-        assert len(schools) == 1
+    def test_mentioned_entity_not_investigated(self):
+        findings = [
+            Finding(
+                source="Paper", language="en",
+                author="Alice",
+                entities_mentioned=["Dave", "Eve"],
+            )
+        ]
+        graph = CitationGraph()
+        graph.build_from_findings(findings)
+        assert graph.nodes["dave"].investigated is False
 
-    def test_check_single_school_critical(self):
-        g = CitationGraph()
-        g.add_finding(_scholar("Alice", ["Bob"]))
-        g.add_finding(_scholar("Bob", ["Alice"]))
-        anomaly = g.check_single_school()
-        assert anomaly is not None
-        assert anomaly.severity == Severity.CRITICAL
-        assert anomaly.anomaly_type == AnomalyType.SCHOOL_GAP
+    def test_school_detection_mutual_citation(self):
+        findings = [
+            Finding(
+                source="P1", language="en",
+                author="Alice", entities_mentioned=["Bob"],
+            ),
+            Finding(
+                source="P2", language="en",
+                author="Bob", entities_mentioned=["Alice"],
+            ),
+        ]
+        graph = CitationGraph()
+        graph.build_from_findings(findings)
+        schools = graph.detect_schools()
+        assert len(schools) >= 1
+        assert schools[0].size >= 2
 
-    def test_check_multiple_schools_no_anomaly(self):
-        g = CitationGraph()
-        g.add_finding(_scholar("Alice", ["Bob"]))
-        g.add_finding(_scholar("Bob", ["Alice"]))
-        g.add_finding(_scholar("Carol", ["Dave"]))
-        g.add_finding(_scholar("Dave", ["Carol"]))
-        anomaly = g.check_single_school()
-        assert anomaly is None
+    def test_no_school_without_mutual_citation(self):
+        findings = [
+            Finding(
+                source="P1", language="en",
+                author="Alice", entities_mentioned=["Bob"],
+            ),
+            Finding(
+                source="P2", language="en",
+                author="Carol", entities_mentioned=["Dave"],
+            ),
+        ]
+        graph = CitationGraph()
+        graph.build_from_findings(findings)
+        schools = graph.detect_schools()
+        # No mutual citations = no schools (of size >= 2)
+        mutual_schools = [s for s in schools if s.size >= 2]
+        assert len(mutual_schools) == 0
 
-    def test_find_citation_islands(self):
-        g = CitationGraph()
-        # Eve is cited by Alice and Bob but never searched directly
-        g.add_finding(_scholar("Alice", ["Eve"], query="search alice"))
-        g.add_finding(_scholar("Bob", ["Eve"], query="search bob"))
-        g.add_finding(Finding(
-            name="Eve",
-            finding_type=FindingType.SCHOLAR,
-            source_query="",  # no direct search
-            citations=[],
-        ))
-        islands = g.find_citation_islands(min_citations=2)
-        assert len(islands) == 1
-        assert islands[0]["name"] == "eve"
-        assert islands[0]["in_citations"] == 2
+    def test_isolated_scholars(self):
+        findings = [
+            Finding(
+                source="P1", language="en",
+                author="Alice", entities_mentioned=["Zara"],
+            ),
+            Finding(
+                source="P2", language="en",
+                author="Bob", entities_mentioned=["Zara"],
+            ),
+            Finding(
+                source="P3", language="en",
+                author="Carol", entities_mentioned=["Zara"],
+            ),
+        ]
+        graph = CitationGraph()
+        graph.build_from_findings(findings)
+        isolated = graph.detect_isolated_scholars()
+        names = [n.name for n in isolated]
+        assert "Zara" in names
 
-    def test_investigation_priority_ranking(self):
-        g = CitationGraph()
-        g.add_finding(_scholar("Alice", ["Eve", "Frank"], query="search"))
-        g.add_finding(_scholar("Bob", ["Eve"], query="search"))
-        g.add_finding(_scholar("Eve", [], query="search eve"))
-        rankings = g.investigation_priority_ranking()
-        # Eve: in_citations=2, direct=1, priority=2/2=1.0
-        # Frank: in_citations=1, direct=0, priority=1/1=1.0
-        # Alice: in_citations=0, direct=1, priority=0/2=0.0
-        eve_rank = next(r for r in rankings if r["name"] == "eve")
-        assert eve_rank["priority"] == 1.0
+    def test_priority_uninvestigated(self, sample_findings):
+        graph = CitationGraph()
+        graph.build_from_findings(sample_findings)
+        priority = graph.get_priority_uninvestigated(3)
+        # All prioritized should be uninvestigated
+        for node in priority:
+            assert not node.investigated
 
-    def test_generate_anomalies_includes_islands(self):
-        g = CitationGraph()
-        g.add_finding(_scholar("Alice", ["Eve"], query="search"))
-        g.add_finding(_scholar("Bob", ["Eve"], query="search"))
-        g.add_finding(Finding(
-            name="Eve", finding_type=FindingType.SCHOLAR,
-            source_query="", citations=[],
-        ))
-        anomalies = g.generate_anomalies()
-        island_anomalies = [a for a in anomalies if a.anomaly_type == AnomalyType.CITATION_ISLAND]
-        assert len(island_anomalies) == 1
+    def test_generate_anomalies_citation_island(self):
+        findings = [
+            Finding(
+                source=f"P{i}", language="en",
+                author=f"Author{i}", entities_mentioned=["Mystery Scholar"],
+            )
+            for i in range(5)
+        ]
+        graph = CitationGraph()
+        graph.build_from_findings(findings)
+        anomalies = graph.generate_anomalies()
+        island_anomalies = [
+            a for a in anomalies if a.gap_type == GapType.CITATION_ISLAND
+        ]
+        assert len(island_anomalies) >= 1
 
-    def test_case_insensitive(self):
-        g = CitationGraph()
-        g.add_finding(_scholar("Alice", ["BOB"]))
-        g.add_finding(_scholar("Carol", ["bob"]))
-        # Both Alice and Carol cite Bob (case-insensitive)
-        assert g.in_degree("bob") == 2
+    def test_summary(self, sample_findings):
+        graph = CitationGraph()
+        graph.build_from_findings(sample_findings)
+        summary = graph.summary()
+        assert "total_nodes" in summary
+        assert "total_edges" in summary
 
-    def test_empty_graph(self):
-        g = CitationGraph()
-        assert g.node_count == 0
-        assert g.detect_schools() == []
-        assert g.find_citation_islands() == []
+    def test_non_scholar_filtering(self):
+        findings = [
+            Finding(
+                source="P1", language="en",
+                author="Alice", entities_mentioned=["Amphipolis"],
+            ),
+        ]
+        graph = CitationGraph()
+        graph.register_non_scholars({"Amphipolis"})
+        graph.build_from_findings(findings)
+        assert "amphipolis" not in graph.nodes

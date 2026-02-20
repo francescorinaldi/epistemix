@@ -1,96 +1,97 @@
 """Tests for the connector module."""
 
-from epistemix.connector import MockConnector, ConnectorResponse, extract_json
+from epistemix.connector import MockConnector, extract_json
+from epistemix.models import Finding, GapType, SearchQuery, Severity
 
 
 class TestMockConnector:
-    def test_pattern_matching(self):
-        mc = MockConnector()
-        mc.register_response("amphipolis", "Found the tomb!")
-        resp = mc.query("Tell me about Amphipolis tomb")
-        assert "Found the tomb!" in resp.text
+    def test_register_and_execute(self):
+        connector = MockConnector()
+        connector.register_findings("amphipolis", [
+            Finding(source="Paper A", language="en", author="Alice"),
+        ])
+        query = SearchQuery(
+            query="Amphipolis tomb research",
+            language="en",
+        )
+        findings = connector.execute_query(query)
+        assert len(findings) == 1
+        assert findings[0].author == "Alice"
+        assert query.executed is True
 
-    def test_default_response(self):
-        mc = MockConnector()
-        resp = mc.query("something random")
-        assert "No specific information" in resp.text
-
-    def test_search(self):
-        mc = MockConnector()
-        mc.register_response("amphipolis", "Tomb excavation results")
-        resp = mc.search("Amphipolis tomb research")
-        assert "Tomb excavation" in resp.text
-
-    def test_call_logging(self):
-        mc = MockConnector()
-        mc.query("first query")
-        mc.query("second query")
-        assert mc.call_count == 2
-        assert mc.call_log[0]["prompt"] == "first query"
-
-    def test_search_logging(self):
-        mc = MockConnector()
-        mc.search("query one")
-        mc.search("query two")
-        assert mc.search_count == 2
-
-    def test_zero_cost(self):
-        mc = MockConnector()
-        mc.query("test")
-        assert mc.total_cost == 0.0
-
-    def test_register_responses_bulk(self):
-        mc = MockConnector()
-        mc.register_responses({
-            "topic a": "response a",
-            "topic b": "response b",
-        })
-        assert "response a" in mc.query("topic a question").text
-        assert "response b" in mc.query("topic b question").text
+    def test_no_match_returns_empty(self):
+        connector = MockConnector()
+        query = SearchQuery(query="unrelated topic", language="en")
+        findings = connector.execute_query(query)
+        assert len(findings) == 0
 
     def test_case_insensitive_matching(self):
-        mc = MockConnector()
-        mc.register_response("AMPHIPOLIS", "Found it!")
-        resp = mc.query("amphipolis tomb")
-        assert "Found it!" in resp.text
+        connector = MockConnector()
+        connector.register_findings("AMPHIPOLIS", [
+            Finding(source="Paper", language="en"),
+        ])
+        query = SearchQuery(query="amphipolis research", language="en")
+        findings = connector.execute_query(query)
+        assert len(findings) == 1
 
-    def test_custom_default(self):
-        mc = MockConnector()
-        mc.set_default_response("Nothing here")
-        resp = mc.query("random")
-        assert resp.text == "Nothing here"
+    def test_execute_batch(self):
+        connector = MockConnector()
+        connector.register_findings("topic", [
+            Finding(source="P1", language="en"),
+        ])
+        queries = [
+            SearchQuery(query="topic one", language="en"),
+            SearchQuery(query="topic two", language="en"),
+        ]
+        findings = connector.execute_batch(queries)
+        assert len(findings) == 2
 
+    def test_batch_with_limit(self):
+        connector = MockConnector()
+        connector.register_findings("topic", [
+            Finding(source="P", language="en"),
+        ])
+        queries = [
+            SearchQuery(query="topic 1", language="en"),
+            SearchQuery(query="topic 2", language="en"),
+            SearchQuery(query="topic 3", language="en"),
+        ]
+        findings = connector.execute_batch(queries, limit=2)
+        assert connector.call_count == 2
 
-class TestConnectorResponse:
-    def test_basic(self):
-        resp = ConnectorResponse(text="hello", model="test")
-        assert resp.text == "hello"
-        assert resp.model == "test"
-        assert resp.usage == {}
+    def test_total_cost_is_zero(self):
+        connector = MockConnector()
+        assert connector.total_cost == 0.0
+
+    def test_call_log(self):
+        connector = MockConnector()
+        q = SearchQuery(query="test", language="en")
+        connector.execute_query(q)
+        assert len(connector.call_log) == 1
 
 
 class TestExtractJson:
     def test_json_block(self):
-        text = 'Here is the data:\n```json\n{"name": "test", "value": 42}\n```'
+        text = '```json\n[{"key": "value"}]\n```'
         result = extract_json(text)
-        assert result == {"name": "test", "value": 42}
+        assert result == [{"key": "value"}]
 
-    def test_bare_json(self):
-        text = 'The result is {"scholars": ["Alice", "Bob"]}'
+    def test_bare_json_object(self):
+        text = 'Some text {"key": "value"} more text'
         result = extract_json(text)
-        assert result == {"scholars": ["Alice", "Bob"]}
+        assert result == {"key": "value"}
 
-    def test_json_array(self):
-        text = 'Found: [1, 2, 3]'
+    def test_bare_json_array(self):
+        text = 'Text [1, 2, 3] more'
         result = extract_json(text)
         assert result == [1, 2, 3]
 
     def test_no_json(self):
-        text = "Just plain text with no JSON"
+        text = "No json here at all"
         result = extract_json(text)
         assert result is None
 
-    def test_malformed_json(self):
-        text = '{"broken": incomplete'
+    def test_invalid_json(self):
+        text = "```json\n{invalid}\n```"
         result = extract_json(text)
         assert result is None
