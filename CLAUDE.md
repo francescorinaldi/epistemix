@@ -14,7 +14,7 @@ Epistemix is an **epistemic audit framework** that detects "unknown unknowns" in
 5. Runs a dual-agent audit (two agents with different biases → an arbiter finds where they disagree)
 6. Reports coverage as a lower bound — we can never be sure we found everything
 
-The reference scenario is the **Amphipolis tomb excavation** (Greece, archaeology). All mock data and test fixtures use this scenario.
+The reference scenario is the **Amphipolis tomb excavation** (Greece, archaeology). All mock data and test fixtures use this scenario. The **Antikythera mechanism** (Greece, archaeology/history of science) is the live validation scenario, tested Feb 2026 with 7 languages, 4 cycles, 50+ sources, 30+ scholars.
 
 ## Repository Structure
 
@@ -31,7 +31,7 @@ epistemix/
 │   ├── multi_agent.py       # Dual-agent α/β + arbiter
 │   └── run.py               # CLI entry point
 │
-├── tests/                   # 113 tests (pytest)
+├── tests/                   # 138 tests (pytest)
 │   ├── conftest.py          # Shared fixtures, Amphipolis mock data
 │   ├── test_models.py       # Data structure tests
 │   ├── test_citation_graph.py
