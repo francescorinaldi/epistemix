@@ -1077,6 +1077,7 @@ class EpistemixEngine:
                 for rel in new_relations:
                     rel.cycle = self.current_cycle
                 self.semantic_graph.add_relations(new_relations)
+                self.semantic_graph.mark_investigated(self.findings)
                 graph_anomalies = self.semantic_graph.generate_anomalies()
                 self.all_anomalies.extend(graph_anomalies)
             relations_count = len(self.semantic_graph.relations)

@@ -39,6 +39,18 @@ Each finding should be a JSON object with these fields:
 
 Return ONLY a JSON array of findings. No other text."""
 
+RELATION_SYSTEM_PROMPT = """You are a research assistant helping with an epistemic audit.
+Your task is to identify semantic relations between research entities.
+
+For each pair of entities, return a JSON object with these fields:
+- "source": the first entity name (string, required)
+- "target": the second entity name (string, required)
+- "relation": one of "supports", "contests", "contradicts", "cites", "extends", "supervises", "coauthors", "translates" (string, required)
+- "confidence": how confident you are in this relation, 0.0-1.0 (float, required)
+- "evidence": brief textual justification (string, required)
+
+Return ONLY a JSON array of relation objects. No other text."""
+
 
 # ============================================================
 # BASE CONNECTOR
@@ -332,7 +344,7 @@ class ClaudeConnector(BaseConnector):
         kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": 4096,
-            "system": SYSTEM_PROMPT,
+            "system": RELATION_SYSTEM_PROMPT,
             "messages": messages,
         }
 

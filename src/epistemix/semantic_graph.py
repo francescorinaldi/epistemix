@@ -111,6 +111,18 @@ class SemanticGraph:
                 self._typed_adjacency[src_key][tgt_key] = []
             self._typed_adjacency[src_key][tgt_key].append(rel.relation)
 
+    def mark_investigated(self, findings: list) -> None:
+        """Mark nodes as investigated if they appear as authors in findings.
+
+        This prevents false CITATION_ISLAND anomalies for scholars who
+        were already found via findings in the same audit.
+        """
+        for f in findings:
+            if f.author:
+                key = f.author.lower().strip()
+                if key in self.nodes:
+                    self.nodes[key].investigated = True
+
     # ----------------------------------------------------------
     # School detection (union-find on SUPPORTS)
     # ----------------------------------------------------------
