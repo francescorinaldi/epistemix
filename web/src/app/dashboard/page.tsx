@@ -41,6 +41,9 @@ export default function DashboardPage() {
       const res = await fetch(`/api/v1/audits/${auditId}`, { method: "DELETE" });
       if (res.ok) {
         setAudits((prev) => prev.filter((a) => a.id !== auditId));
+      } else {
+        const body = await res.json().catch(() => null);
+        alert(body?.error ?? "Failed to delete audit.");
       }
     } finally {
       setDeleting(null);
@@ -124,12 +127,13 @@ export default function DashboardPage() {
                     <span className="date">
                       {new Date(audit.created_at).toLocaleDateString()}
                     </span>
-                    {audit.status !== "running" && (
+                    {(audit.status === "complete" || audit.status === "failed") && (
                       <button
                         className="delete-btn"
                         onClick={() => handleDelete(audit.id)}
                         disabled={deleting === audit.id}
                         title="Delete audit"
+                        aria-label="Delete audit"
                       >
                         {deleting === audit.id ? "..." : "\u00d7"}
                       </button>

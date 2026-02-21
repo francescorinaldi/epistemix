@@ -104,7 +104,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check audit exists and is not running
+    // Check audit exists and is in a terminal state
     const { data: audit } = await supabase
       .from("audits")
       .select("id, status")
@@ -115,19 +115,20 @@ export async function DELETE(
       return NextResponse.json({ error: "Audit not found" }, { status: 404 });
     }
 
-    if ((audit as { status: string }).status === "running") {
+    const status = (audit as { status: string }).status;
+    if (status !== "complete" && status !== "failed") {
       return NextResponse.json(
-        { error: "Cannot delete a running audit. Stop it first." },
+        { error: "Can only delete completed or failed audits." },
         { status: 409 }
       );
     }
 
-    const { error } = await supabase
+    const { error, count } = await supabase
       .from("audits")
-      .delete()
+      .delete({ count: "exact" })
       .eq("id", id);
 
-    if (error) {
+    if (error || count === 0) {
       return NextResponse.json(
         { error: "Failed to delete audit" },
         { status: 500 }
