@@ -211,8 +211,8 @@ class TestCalculateCoverage:
                 severity_if_unmet=Severity.MEDIUM, met=True,
             ),
         ]
-        score = calculate_coverage(expectations, [])
-        assert score > 90
+        result = calculate_coverage(expectations, [])
+        assert result.accessible_score > 90
 
     def test_none_met(self):
         expectations = [
@@ -221,8 +221,8 @@ class TestCalculateCoverage:
                 severity_if_unmet=Severity.HIGH, met=False,
             ),
         ]
-        score = calculate_coverage(expectations, [])
-        assert score == 0.0
+        result = calculate_coverage(expectations, [])
+        assert result.accessible_score == 0.0
 
     def test_anomaly_penalty(self):
         from epistemix.models import Anomaly
@@ -238,9 +238,9 @@ class TestCalculateCoverage:
                 severity=Severity.HIGH,
             )
         ]
-        score_with = calculate_coverage(expectations, anomalies)
-        score_without = calculate_coverage(expectations, [])
-        assert score_with < score_without
+        result_with = calculate_coverage(expectations, anomalies)
+        result_without = calculate_coverage(expectations, [])
+        assert result_with.accessible_score < result_without.accessible_score
 
 
 class TestEpistemixEngine:
