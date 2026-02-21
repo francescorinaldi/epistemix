@@ -2,6 +2,10 @@
 
 from epistemix.models import AccessTier, LanguageEcosystem
 from epistemix.knowledge import LANGUAGE_ECOSYSTEMS, CROSS_LANGUAGE_STRATEGIES
+from epistemix.meta_axioms import (
+    MA_08_ACCESS, META_AXIOMS, META_AXIOM_BY_ID,
+    generate_postulate_descriptions,
+)
 
 
 class TestLanguageEcosystemRegistry:
@@ -75,3 +79,22 @@ class TestCrossLanguageStrategies:
             assert lang in CROSS_LANGUAGE_STRATEGIES, (
                 f"Missing cross-language strategy for {lang}"
             )
+
+
+class TestMA08AccessBarriers:
+    def test_axiom_id(self):
+        assert MA_08_ACCESS.id == "MA-08"
+
+    def test_axiom_name(self):
+        assert MA_08_ACCESS.name == "Access Barriers"
+
+    def test_axiom_has_postulate_templates(self):
+        assert len(MA_08_ACCESS.postulate_templates) >= 3
+
+    def test_axiom_in_meta_axioms_tuple(self):
+        assert MA_08_ACCESS in META_AXIOMS
+        assert len(META_AXIOMS) == 8
+
+    def test_axiom_in_lookup_dict(self):
+        assert "MA-08" in META_AXIOM_BY_ID
+        assert META_AXIOM_BY_ID["MA-08"] is MA_08_ACCESS

@@ -117,6 +117,24 @@ MA_07_TEMPORAL = MetaAxiom(
 )
 
 
+MA_08_ACCESS = MetaAxiom(
+    id="MA-08",
+    name="Access Barriers",
+    description=(
+        "Some knowledge ecosystems are structurally inaccessible via "
+        "open web search. Walled-garden databases (CNKI, Al-Manhal, etc.) "
+        "contain academic literature that cannot be retrieved or verified "
+        "through standard search APIs. An audit that ignores these barriers "
+        "overstates its coverage."
+    ),
+    postulate_templates=(
+        "Academic literature on {topic} exists behind gated databases in {country}",
+        "Web search alone cannot verify {topic} research in walled-garden ecosystems",
+        "Coverage of {topic} is structurally incomplete for non-open-web languages",
+    ),
+)
+
+
 META_AXIOMS: tuple[MetaAxiom, ...] = (
     MA_01_LANGUAGE,
     MA_02_INSTITUTION,
@@ -125,6 +143,7 @@ META_AXIOMS: tuple[MetaAxiom, ...] = (
     MA_05_DISCIPLINE,
     MA_06_PUBLICATION,
     MA_07_TEMPORAL,
+    MA_08_ACCESS,
 )
 
 META_AXIOM_BY_ID: dict[str, MetaAxiom] = {ma.id: ma for ma in META_AXIOMS}
