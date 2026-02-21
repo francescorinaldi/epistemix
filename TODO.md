@@ -30,7 +30,7 @@
 - [x] Temporal decay per domain (archaeology: 0.02, finance: 0.15)
 - [x] CycleSnapshot v3 fields (weighted_postulates_count, avg_confidence, negative_postulates_count)
 - [x] Engine serialization includes v3 data
-- [x] 171 tests (all passing)
+- [x] 211 tests (all passing — Amphipolis + JFK scenarios)
 
 ## Phase 2: Production Stack (COMPLETE — code written, not yet deployed)
 
@@ -65,6 +65,16 @@
 - [ ] **BYOK UI** — Settings page for users to enter their Anthropic API key
 - [ ] **API key management** — Enterprise customers get API keys for programmatic access
 - [ ] **Plan upgrade prompts** — In-app prompts when free tier limits reached
+
+## v3 Phase 1c: EntityRegistry + Entity Enrichment (COMPLETE)
+
+- [x] **EntityRegistry class** — Dynamic entity classification in `knowledge.py` (seed sets + runtime registration)
+- [x] **Extended keyword heuristics** — +13 institution keywords (corporation, inc, ltd, gmbh, spa, council, foundation, authority, bureau, office, board, agency, commission)
+- [x] **Registry wiring** — DynamicPostulates + EpistemixEngine share single EntityRegistry instance
+- [x] **Entity enrichment** — ClaudeConnector SYSTEM_PROMPT requests `entity_types` field, registers in shared registry
+- [x] **JFK test scenario** — Second test domain (US, history/investigative, en/es/ru, 7 findings, 12 tests)
+- [x] **EntityRegistry tests** — 28 tests covering seed, dynamic, normalization, keywords, stats, retrocompat
+- [x] 211 tests (all passing)
 
 ## v3 Phase 3: Semantic Relation Graph (COMPLETE)
 
@@ -126,7 +136,7 @@
 ## Known Issues
 
 - Web app `npm install` not yet run (no `node_modules/` or `package-lock.json`)
-- Entity extraction regex patterns may miss non-Latin names
+- Entity extraction regex patterns may miss non-Latin names (partially mitigated by EntityRegistry dynamic registration)
 - `EVIDENCE_DISCIPLINE_MAP` is archaeology-focused — needs expansion for other fields
 - Worker Dockerfile not yet tested in production Fly.io environment
 

@@ -14,7 +14,7 @@ Epistemix is an **epistemic audit framework** that detects "unknown unknowns" in
 5. Runs a dual-agent audit (two agents with different biases → an arbiter finds where they disagree)
 6. Reports coverage as a lower bound — we can never be sure we found everything
 
-The reference scenario is the **Amphipolis tomb excavation** (Greece, archaeology). All mock data and test fixtures use this scenario. The **Antikythera mechanism** (Greece, archaeology/history of science) is the live validation scenario, tested Feb 2026 with 7 languages, 4 cycles, 50+ sources, 30+ scholars.
+The reference scenario is the **Amphipolis tomb excavation** (Greece, archaeology). The secondary test scenario is the **JFK assassination** (US, history/investigative) — validates generalisation to non-archaeology domains. The **Antikythera mechanism** (Greece, archaeology/history of science) is the live validation scenario, tested Feb 2026 with 7 languages, 4 cycles, 50+ sources, 30+ scholars.
 
 ## Repository Structure
 
@@ -26,14 +26,16 @@ epistemix/
 │   ├── semantic_graph.py     # Typed relation graph, school/fracture detection
 │   ├── disciplines.py       # Evidence → expected discipline mapping
 │   ├── content_analysis.py  # Structural absence, convergence, empty query patterns
-│   ├── connector.py         # MockConnector (tests) / ClaudeConnector (production)
+│   ├── knowledge.py         # Geographic-linguistic data, EntityRegistry, entity classification
+│   ├── connector.py         # MockConnector (tests) / ClaudeConnector (production, entity enrichment)
 │   ├── core.py              # EpistemicEngine — main audit orchestrator
 │   ├── multi_agent.py       # Dual-agent α/β + arbiter
 │   └── run.py               # CLI entry point
 │
-├── tests/                   # 171 tests (pytest)
-│   ├── conftest.py          # Shared fixtures, Amphipolis mock data
+├── tests/                   # 211 tests (pytest)
+│   ├── conftest.py          # Shared fixtures (Amphipolis + JFK mock data)
 │   ├── test_models.py       # Data structure tests
+│   ├── test_knowledge.py    # EntityRegistry tests
 │   ├── test_semantic_graph.py
 │   ├── test_disciplines.py
 │   ├── test_content_analysis.py
@@ -41,7 +43,8 @@ epistemix/
 │   ├── test_core.py         # EpistemicEngine tests
 │   ├── test_multi_agent.py
 │   ├── test_integrated.py   # Full pipeline integration test
-│   └── test_amphipolis.py   # 4-cycle Amphipolis simulation
+│   ├── test_amphipolis.py   # 4-cycle Amphipolis simulation
+│   └── test_jfk.py          # JFK assassination scenario (investigative)
 │
 ├── web/                     # Next.js 15 frontend (deploys to Vercel)
 │   └── src/
@@ -98,7 +101,8 @@ docker-compose up supabase-db
 meta_axioms.py ──┐
                  │
 models.py ───────┤
-                 ├──► semantic_graph.py ──┐
+                 ├──► knowledge.py ───────┐
+                 ├──► semantic_graph.py ──┤
                  ├──► disciplines.py ─────┤
                  ├──► content_analysis.py ┤
                  │                        │
@@ -130,6 +134,8 @@ models.py ───────┤
 | Weighted postulates (v3) | Confidence score per postulate (0.0–1.0) | Drives query strategy: VERIFY/STANDARD/RELIABLE/CONSOLIDATED |
 | Negative postulates (v3) | Structured evidence of absence | Feedback loop: empty query → hypothesis → reformulated query |
 | Temporal decay (v3) | Confidence decays per-domain rate | Archaeology 0.02/month, finance 0.15/month |
+| EntityRegistry (v3) | Dynamic entity classification in `knowledge.py` | Seed sets + runtime registration, shared across engine/connector |
+| Entity enrichment (v3) | ClaudeConnector asks API for `entity_types` per finding | Free classification data from LLM, feeds back into registry |
 
 ## The 7 Meta-Axioms
 
@@ -147,8 +153,8 @@ models.py ───────┤
 
 The `connector.py` module is the **only place** where AI provider coupling exists.
 
-- **MockConnector**: Pattern-matched responses. Used in all 171 tests. Zero cost.
-- **ClaudeConnector**: Anthropic SDK with `web_search_20250305` tool, budget tracking, retry with backoff.
+- **MockConnector**: Pattern-matched responses. Used in all 211 tests. Zero cost.
+- **ClaudeConnector**: Anthropic SDK with `web_search_20250305` tool, budget tracking, retry with backoff. Supports entity enrichment via shared `EntityRegistry`.
 - **Switching**: Set `ANTHROPIC_API_KEY` env var → worker uses `ClaudeConnector`. No key → falls back to `MockConnector`.
 
 To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (4 methods: `query()`, `search()`, `extract_relations()`, `total_cost`).
@@ -182,19 +188,21 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (4 metho
 - Do NOT import upward in the dependency graph
 - Do NOT store secrets in code (use env vars)
 - Do NOT add `networkx` — semantic graph uses stdlib union-find and DFS
-- Do NOT modify test fixtures in `conftest.py` without running all 171 tests
+- Do NOT modify test fixtures in `conftest.py` without running all 211 tests
 - Do NOT use `git push --force` on main
 - Do NOT create always-on infrastructure (everything scales to zero)
 
 ## Current Status (v0.2.0)
 
 **Done:**
-- Complete Python core library (10 modules)
-- Full test suite (171 tests, all passing)
+- Complete Python core library (11 modules incl. knowledge.py)
+- Full test suite (211 tests, all passing — Amphipolis + JFK scenarios)
 - v3 Phase 1: WeightedPostulate with confidence scoring
 - v3 Phase 2: NegativePostulate with empty-query feedback loop
 - v3 Phase 3: Semantic Relation Graph (8 typed relations, replaces citation_graph)
 - v3 Phase 7: Temporal decay (per-domain configurable)
+- EntityRegistry: dynamic entity classification with seed sets + runtime registration
+- Entity enrichment: ClaudeConnector extracts entity_types from API, feeds shared registry
 - Next.js web app (landing, auth, dashboard, live audit page, 6 components)
 - Fly.io worker (scale-to-zero, real-time progress)
 - Supabase schema (4 migrations, RLS, Realtime, Edge Functions)
