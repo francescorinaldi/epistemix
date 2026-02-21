@@ -138,9 +138,10 @@ export default function HomePage() {
             <span className={styles.stepNum}>01</span>
             <h3 className={styles.stepTitle}>Predict</h3>
             <p className={styles.stepDesc}>
-              Seven meta-axioms about how academic knowledge is structured
-              generate testable hypotheses about what languages, institutions,
-              and theories should be present.
+              Eight meta-axioms about how academic knowledge is structured
+              generate weighted postulates: testable hypotheses about what
+              languages, institutions, theories, and access barriers should
+              be present — each scored with a confidence level.
             </p>
           </div>
           <div className={styles.step}>
@@ -148,17 +149,29 @@ export default function HomePage() {
             <h3 className={styles.stepTitle}>Search</h3>
             <p className={styles.stepDesc}>
               Multilingual queries reach across language barriers. Epistemix
-              searches in English, Greek, French, German, Italian, and more
-              to surface perspectives a monolingual search would miss.
+              searches in English, Greek, French, German, Italian, Arabic,
+              Chinese, Japanese, and Korean to surface perspectives a
+              monolingual search would miss.
             </p>
           </div>
           <div className={styles.step}>
             <span className={styles.stepNum}>03</span>
+            <h3 className={styles.stepTitle}>Extract</h3>
+            <p className={styles.stepDesc}>
+              Scholars, institutions, theories, and evidence are extracted and
+              linked in a typed semantic graph. Eight relation types — supports,
+              contests, extends, translates, and more — map the intellectual
+              landscape of the field.
+            </p>
+          </div>
+          <div className={styles.step}>
+            <span className={styles.stepNum}>04</span>
             <h3 className={styles.stepTitle}>Detect</h3>
             <p className={styles.stepDesc}>
-              Findings are compared against postulates. Gaps become anomalies:
-              missing disciplines, citation islands, echo chambers. Coverage
-              is always a lower bound.
+              Findings are matched against postulates. Gaps become anomalies:
+              missing disciplines, citation islands, echo chambers, structurally
+              inaccessible knowledge ecosystems. Coverage is always a lower bound —
+              you can never claim completeness.
             </p>
           </div>
         </div>
@@ -167,17 +180,22 @@ export default function HomePage() {
       <section className={styles.agents}>
         <div className={styles.agentContent}>
           <div className={styles.agentText}>
-            <h2>Two perspectives.<br />One truth.</h2>
+            <h2>Two perspectives.<br />One arbiter.</h2>
             <p>
-              Agent &alpha; examines institutional structure &mdash; languages,
-              citation schools, publication channels. Agent &beta; examines
-              theoretical substance &mdash; competing theories, disciplinary
-              breadth, temporal evolution.
+              After the full prediction, search, and extraction pipeline, two
+              independent agents audit the same evidence with different biases.
+              Agent&nbsp;&alpha; weights structural signals &mdash; language
+              spread, citation schools, publication channels, and knowledge
+              ecosystems blocked by access barriers. Agent&nbsp;&beta; weights
+              epistemic signals &mdash; competing theories, disciplinary
+              breadth, confidence decay over time.
             </p>
             <p>
-              Where they disagree, you have a blind spot. An independent
-              arbiter compares their reports. Disagreements become{" "}
-              <em>known unknowns</em> &mdash; the most valuable output of the audit.
+              An independent arbiter compares their scored postulates and maps
+              every divergence back to the original hypotheses. Disagreements
+              become <em>known unknowns</em> &mdash; the gaps a single-perspective
+              literature review could never surface, and the most actionable
+              output of the audit.
             </p>
           </div>
           <div className={styles.agentViz}>
