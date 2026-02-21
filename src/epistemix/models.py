@@ -68,6 +68,7 @@ class GapType(Enum):
     RELATIONAL_GAP = "relational_gap"
     FRACTURE_LINE = "fracture_line"
     INFLUENCE_GAP = "influence_gap"
+    ACCESS_BARRIER = "access_barrier"
 
 
 class EntityType(Enum):
@@ -111,9 +112,55 @@ class RelationType(Enum):
     TRANSLATES = "translates"
 
 
+class AccessTier(Enum):
+    """How reachable a language's academic ecosystem is via web search."""
+    OPEN_WEB = "open_web"
+    PARTIAL_ACCESS = "partial_access"
+    WALLED_GARDEN = "walled_garden"
+
+
 # ---------------------------------------------------------------------------
 # Core data structures
 # ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class LanguageEcosystem:
+    """Per-language metadata for access-barrier reasoning."""
+    language: str
+    access_tier: AccessTier
+    gated_databases: tuple[str, ...]
+    estimated_gated_share: float
+    query_style: str   # "keyword", "morphological", "phrasal"
+    script: str        # "latin", "arabic", "cjk", "hangul"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "language": self.language,
+            "access_tier": self.access_tier.value,
+            "gated_databases": list(self.gated_databases),
+            "estimated_gated_share": self.estimated_gated_share,
+            "query_style": self.query_style,
+            "script": self.script,
+        }
+
+
+@dataclass
+class CoverageBreakdown:
+    """Split coverage: what we verified vs. what we estimate is unreachable."""
+    accessible_score: float
+    estimated_unreachable: float
+    barrier_annotations: list[str] = field(default_factory=list)
+    gated_expectations_count: int = 0
+    gated_expectations_met: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "accessible_score": round(self.accessible_score, 1),
+            "estimated_unreachable": round(self.estimated_unreachable, 1),
+            "barrier_annotations": self.barrier_annotations,
+            "gated_expectations_count": self.gated_expectations_count,
+            "gated_expectations_met": self.gated_expectations_met,
+        }
 
 @dataclass
 class Entity:
