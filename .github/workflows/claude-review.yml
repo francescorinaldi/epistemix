@@ -1,0 +1,51 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Auto-review every PR open and every new push
+  review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this PR. Focus on:
+            1. Circular imports in src/epistemix/ (strict DAG — see CLAUDE.md)
+            2. External dependencies in the Python core (zero-dep policy)
+            3. Security issues (secrets in code, injection, XSS)
+            4. System prompt misuse (SYSTEM_PROMPT vs RELATION_SYSTEM_PROMPT)
+            5. Test breakage risks (171 tests must pass)
+            6. Code quality (type hints, error handling, dead code)
+
+            Be concise. Only flag real issues, not style nitpicks.
+          claude_args: "--model claude-opus-4-6 --max-turns 5"
+
+  # Respond to @claude mentions in comments
+  respond:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model claude-opus-4-6 --max-turns 10"
