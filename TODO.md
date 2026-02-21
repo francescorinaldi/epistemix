@@ -75,13 +75,19 @@
 - [x] **Automated inference** — Schools = SUPPORTS union-find, fractures = CONTESTS/CONTRADICTS, influence = DFS chains
 - [x] **Engine integration** — run_cycle(connector=None), incremental extraction, backward compatible
 
-## v3 Phase 4: Arabic + Chinese Access Barriers (NOT STARTED)
+## v3 Phase 4: Arabic + Chinese + Japanese + Korean Access Barriers (COMPLETE)
 
-- [ ] **AccessBarrierAxiom** — Per-language ecosystem classification (open_web, walled_garden)
-- [ ] **Chinese query generation** — Natural phrases, no word-separated keywords
-- [ ] **Arabic query generation** — Morphological variants, triliteral roots
-- [ ] **Coverage annotation** — "not evaluable via web search" for walled-garden languages
-- [ ] **Test with SARS-CoV-2 or similar topic** with strong Chinese research component
+- [x] **MA-08 Access Barriers axiom** — 8th meta-axiom, per-language AccessTier (OPEN_WEB, PARTIAL_ACCESS, WALLED_GARDEN)
+- [x] **LanguageEcosystem registry** — zh (CNKI 70%), ar (Al-Manhal 35%), ja (CiNii 40%), ko (RISS 35%)
+- [x] **Chinese query generation** — Phrasal compounds, simplified + traditional variants
+- [x] **Arabic query generation** — Morphological variants, triliteral roots, MSA academic terms
+- [x] **Japanese query generation** — Kanji + katakana, academic search terms
+- [x] **Korean query generation** — Hangul terms, research/paper suffixes
+- [x] **CoverageBreakdown** — Split accessible_score + estimated_unreachable (replaces single float)
+- [x] **Cross-language strategies** — Walled-garden reformulation via accessible languages
+- [x] **Engine integration** — _access_barriers() in DynamicInferenceEngine, localize_query() in query gen
+- [x] **SARS-CoV-2 test scenario** — China/virology integration test (conftest fixtures + 3 tests)
+- [x] **223 tests** (all passing)
 
 ## v3 Phase 5: Cross-Session Memory (NOT STARTED)
 
@@ -137,7 +143,7 @@
 For the next development session, the recommended order is:
 
 1. ~~**v3 Phase 3: Semantic Relation Graph**~~ — DONE (PR #4, merged Feb 2026)
-2. **v3 Phase 4: Arabic + Chinese** — Validated by live test (Antikythera showed need)
+2. ~~**v3 Phase 4: Arabic + Chinese + Japanese + Korean Access Barriers**~~ — DONE (223 tests, 12 modules)
 3. **v3 Phase 5: Cross-Session Memory** — The moat (accumulated axioms are the defensible asset)
 4. **Deploy to Supabase/Vercel/Fly.io** — Get production stack running
 5. **Stripe billing** — Minimum viable: Pro plan checkout + webhook
