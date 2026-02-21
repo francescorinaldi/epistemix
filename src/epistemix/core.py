@@ -44,6 +44,7 @@ from epistemix.knowledge import (
     TRANSLITERATIONS,
     classify_entity_name,
 )
+from epistemix.semantic_graph import SemanticGraph
 
 
 # ============================================================
@@ -1029,6 +1030,7 @@ class EpistemixEngine:
         self.pending_queries: list[SearchQuery] = []
         self.cycle_history: list[CycleSnapshot] = []
         self.current_cycle: int = 0
+        self.semantic_graph = SemanticGraph()
 
     def initialize(self) -> list[SearchQuery]:
         """Generate initial multilingual queries."""
@@ -1045,7 +1047,7 @@ class EpistemixEngine:
             all_new.extend(new_entities)
         return all_new
 
-    def run_cycle(self) -> CycleSnapshot:
+    def run_cycle(self, connector=None) -> CycleSnapshot:
         """Run one complete audit cycle."""
         self.current_cycle += 1
 
@@ -1060,6 +1062,24 @@ class EpistemixEngine:
             self.all_expectations, self.findings, self.postulates
         )
         self.all_anomalies = auditor.run()
+
+        # v3 Phase 3: semantic graph — extract relations from this cycle's findings
+        # Note: findings are ingested before run_cycle, so their cycle number
+        # is current_cycle - 1 (set by ingest_findings before the increment).
+        relations_count = 0
+        if connector is not None:
+            cycle_for_findings = self.current_cycle - 1
+            new_findings = [
+                f for f in self.findings if f.cycle == cycle_for_findings
+            ]
+            if new_findings:
+                new_relations = connector.extract_relations(new_findings)
+                for rel in new_relations:
+                    rel.cycle = self.current_cycle
+                self.semantic_graph.add_relations(new_relations)
+                graph_anomalies = self.semantic_graph.generate_anomalies()
+                self.all_anomalies.extend(graph_anomalies)
+            relations_count = len(self.semantic_graph.relations)
 
         self.pending_queries = self.query_gen.generate_gap_filling_queries(
             self.all_anomalies
@@ -1094,6 +1114,9 @@ class EpistemixEngine:
             weighted_postulates_count=snap["weighted_postulates"],
             avg_confidence=snap["avg_confidence"],
             negative_postulates_count=snap["negative_postulates"],
+            relations_count=relations_count,
+            schools_count=len(self.semantic_graph.detect_schools()),
+            fractures_count=len(self.semantic_graph.detect_fractures()),
         )
         self.cycle_history.append(snapshot)
         return snapshot
@@ -1204,4 +1227,8 @@ class EpistemixEngine:
                 np.to_dict()
                 for np in self.postulates.negative_postulates
             ],
+            "semantic_relations": [
+                r.to_dict() for r in self.semantic_graph.relations
+            ],
+            "semantic_graph": self.semantic_graph.summary(),
         }

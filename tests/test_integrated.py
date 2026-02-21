@@ -2,11 +2,10 @@
 
 from epistemix.connector import MockConnector
 from epistemix.core import EpistemixEngine
-from epistemix.citation_graph import CitationGraph
 from epistemix.content_analysis import ContentAnalysisEngine
 from epistemix.disciplines import DisciplineAnalyzer
 from epistemix.multi_agent import MultiAgentSystem
-from epistemix.models import Finding
+from epistemix.models import Finding, RelationType, SemanticRelation
 
 
 class TestFullPipeline:
@@ -46,12 +45,11 @@ class TestFullPipeline:
         assert snap2.n_expectations_met >= snap1.n_expectations_met
 
     def test_auxiliary_analyses(self, all_findings):
-        """Citation graph, disciplines, content analysis all work."""
-        # Citation graph
-        graph = CitationGraph()
-        graph.build_from_findings(all_findings)
-        summary = graph.summary()
-        assert summary["total_nodes"] > 0
+        """Semantic graph, disciplines, content analysis all work."""
+        # Semantic graph (replaces citation graph)
+        from epistemix.semantic_graph import SemanticGraph
+        graph = SemanticGraph()
+        assert graph.summary()["total_nodes"] == 0  # empty until relations added
 
         # Disciplines
         analyzer = DisciplineAnalyzer("archaeology")
@@ -196,3 +194,42 @@ class TestFullPipeline:
         snapshot = engine.run_cycle()
         assert snapshot.n_findings > 0
         assert snapshot.coverage_score >= 0
+
+
+class TestSemanticGraphIntegration:
+    def test_run_cycle_with_connector_builds_graph(self):
+        connector = MockConnector()
+        connector.register_findings("amphipolis", [
+            Finding(
+                source="Paper A", language="en",
+                author="Alice", institution="MIT",
+                source_type="peer_reviewed", year=2024,
+            ),
+        ])
+        connector.register_relations([
+            SemanticRelation(
+                source="Alice", target="Bob",
+                relation=RelationType.CITES, confidence=0.9,
+                evidence="Alice cites Bob", language="en",
+            ),
+        ])
+
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        queries = engine.initialize()
+        findings = connector.execute_batch(queries)
+        engine.ingest_findings(findings)
+        snapshot = engine.run_cycle(connector=connector)
+
+        assert snapshot.relations_count == 1
+        assert len(engine.semantic_graph.relations) == 1
+
+    def test_run_cycle_without_connector_still_works(self):
+        """Backward compatibility: no connector = no graph analysis."""
+        engine = EpistemixEngine("Greece", "Amphipolis tomb", "archaeology")
+        engine.initialize()
+        engine.ingest_findings([
+            Finding(source="Paper", language="en", author="Alice",
+                    source_type="peer_reviewed", year=2024),
+        ])
+        snapshot = engine.run_cycle()
+        assert snapshot.relations_count == 0

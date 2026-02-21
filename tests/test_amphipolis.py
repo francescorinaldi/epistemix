@@ -7,7 +7,6 @@ and multi-agent divergence.
 """
 
 from epistemix.core import DynamicPostulates, EpistemixEngine
-from epistemix.citation_graph import CitationGraph
 from epistemix.disciplines import DisciplineAnalyzer
 from epistemix.multi_agent import (
     AgentInstitutional,
@@ -105,17 +104,23 @@ class TestAmphipolisSimulation:
         gap_types = [a.gap_type for a in anomalies]
         assert GapType.DISCIPLINE_GAP in gap_types
 
-    def test_citation_graph_structure(self, all_findings):
-        """Citation graph should reflect the research network."""
-        graph = CitationGraph()
-        graph.build_from_findings(all_findings)
+    def test_semantic_graph_structure(self, amphipolis_relations):
+        """Semantic graph should reflect the research network."""
+        from epistemix.semantic_graph import SemanticGraph
 
-        assert len(graph.nodes) > 5
-        assert len(graph.edges) > 0
+        graph = SemanticGraph()
+        graph.add_relations(amphipolis_relations)
 
-        # Key researchers should be investigated
-        if "katerina peristeri" in graph.nodes:
-            assert graph.nodes["katerina peristeri"].investigated
+        assert len(graph.nodes) >= 5
+        assert len(graph.relations) == 6
+
+        # Schools: Peristeri + Faklaris + Hephaestion memorial in SUPPORTS school
+        schools = graph.detect_schools()
+        assert len(schools) >= 1
+
+        # Fractures: Mavrogiannis contests Peristeri
+        fractures = graph.detect_fractures()
+        assert len(fractures) >= 1
 
     def test_serialization(
         self, cycle_0_findings, cycle_1_findings,

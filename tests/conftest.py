@@ -15,7 +15,9 @@ from epistemix.models import (
     Expectation,
     Finding,
     GapType,
+    RelationType,
     SearchQuery,
+    SemanticRelation,
     Severity,
 )
 
@@ -275,5 +277,48 @@ def sample_findings() -> list[Finding]:
             source_type="institutional",
             year=2024,
             entities_mentioned=["Alice", "Bob"],
+        ),
+    ]
+
+
+@pytest.fixture
+def amphipolis_relations() -> list[SemanticRelation]:
+    """Semantic relations for the Amphipolis scenario."""
+    return [
+        SemanticRelation(
+            source="Katerina Peristeri", target="Michalis Lefantzis",
+            relation=RelationType.COAUTHORS, confidence=0.95,
+            evidence="Co-directed excavation at Amphipolis",
+            language="en",
+        ),
+        SemanticRelation(
+            source="Panagiotis Faklaris", target="Katerina Peristeri",
+            relation=RelationType.SUPPORTS, confidence=0.7,
+            evidence="Faklaris epigraphy supports Peristeri dating",
+            language="en",
+        ),
+        SemanticRelation(
+            source="Andrew Chugg", target="Katerina Peristeri",
+            relation=RelationType.CITES, confidence=0.9,
+            evidence="Chugg cites Peristeri excavation data",
+            language="en",
+        ),
+        SemanticRelation(
+            source="Mavrogiannis", target="Katerina Peristeri",
+            relation=RelationType.CONTESTS, confidence=0.8,
+            evidence="Mavrogiannis contests Peristeri interpretation",
+            language="it",
+        ),
+        SemanticRelation(
+            source="Katerina Peristeri", target="Hephaestion memorial",
+            relation=RelationType.SUPPORTS, confidence=0.9,
+            evidence="Peristeri argues tomb is Hephaestion memorial",
+            language="en",
+        ),
+        SemanticRelation(
+            source="Andrew Chugg", target="Olympias burial",
+            relation=RelationType.SUPPORTS, confidence=0.85,
+            evidence="Chugg proposes Olympias as occupant",
+            language="en",
         ),
     ]

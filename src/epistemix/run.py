@@ -15,7 +15,6 @@ import sys
 from typing import Any
 
 from epistemix.core import EpistemixEngine
-from epistemix.citation_graph import CitationGraph
 from epistemix.content_analysis import ContentAnalysisEngine
 from epistemix.disciplines import DisciplineAnalyzer
 from epistemix.multi_agent import MultiAgentSystem
@@ -72,7 +71,7 @@ def run_audit(
             print(f"  New entities: {', '.join(new_entities[:10])}")
 
         # Run cycle
-        snapshot = engine.run_cycle()
+        snapshot = engine.run_cycle(connector)
 
         if verbose:
             print(f"  Coverage: {snapshot.coverage_score:.1f}%")
@@ -94,10 +93,6 @@ def run_audit(
         queries = engine.pending_queries
 
     # Auxiliary analyses
-    citation_graph = CitationGraph()
-    citation_graph.build_from_findings(engine.findings)
-    cg_anomalies = citation_graph.generate_anomalies()
-
     discipline_analyzer = DisciplineAnalyzer(discipline)
     discipline_analyzer.ingest_findings(engine.findings)
     disc_anomalies = discipline_analyzer.generate_anomalies()
@@ -111,8 +106,7 @@ def run_audit(
 
     # Compile result
     result = engine.to_dict()
-    result["citation_graph"] = citation_graph.summary()
-    result["citation_anomalies"] = [a.to_dict() for a in cg_anomalies]
+    result["semantic_graph"] = engine.semantic_graph.summary()
     result["discipline_coverage"] = discipline_analyzer.coverage_summary()
     result["discipline_anomalies"] = [a.to_dict() for a in disc_anomalies]
     result["content_anomalies"] = [a.to_dict() for a in content_anomalies]

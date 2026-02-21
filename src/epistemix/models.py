@@ -64,6 +64,10 @@ class GapType(Enum):
     DIVERGENCE_EXCESS = "divergence_excess"
     STRUCTURAL_ABSENCE = "structural_absence"
     EMPTY_QUERY_PATTERN = "empty_query_pattern"
+    # v3 Phase 3: semantic graph gap types
+    RELATIONAL_GAP = "relational_gap"
+    FRACTURE_LINE = "fracture_line"
+    INFLUENCE_GAP = "influence_gap"
 
 
 class EntityType(Enum):
@@ -93,6 +97,18 @@ class QueryLanguage(Enum):
     ARABIC = "ar"
     CHINESE = "zh"
     JAPANESE = "ja"
+
+
+class RelationType(Enum):
+    """Types of semantic relations between entities."""
+    SUPPORTS = "supports"
+    CONTESTS = "contests"
+    CONTRADICTS = "contradicts"
+    CITES = "cites"
+    EXTENDS = "extends"
+    SUPERVISES = "supervises"
+    COAUTHORS = "coauthors"
+    TRANSLATES = "translates"
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +272,34 @@ class NegativePostulate:
 
 
 @dataclass
+class SemanticRelation:
+    """A typed relationship between two entities.
+
+    Extracted by the connector (LLM) from findings.
+    Confidence reflects how certain the extraction is.
+    Evidence is the textual quote justifying the relation.
+    """
+    source: str
+    target: str
+    relation: RelationType
+    confidence: float
+    evidence: str
+    language: str
+    cycle: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source": self.source,
+            "target": self.target,
+            "relation": self.relation.value,
+            "confidence": round(self.confidence, 3),
+            "evidence": self.evidence,
+            "language": self.language,
+            "cycle": self.cycle,
+        }
+
+
+@dataclass
 class Finding:
     """A research finding from a search query.
 
@@ -381,6 +425,10 @@ class CycleSnapshot:
     weighted_postulates_count: int = 0
     avg_confidence: float = 0.0
     negative_postulates_count: int = 0
+    # v3 Phase 3: semantic graph metrics
+    relations_count: int = 0
+    schools_count: int = 0
+    fractures_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -395,6 +443,9 @@ class CycleSnapshot:
             "weighted_postulates": self.weighted_postulates_count,
             "avg_confidence": round(self.avg_confidence, 3),
             "negative_postulates": self.negative_postulates_count,
+            "relations": self.relations_count,
+            "schools": self.schools_count,
+            "fractures": self.fractures_count,
         }
 
 
