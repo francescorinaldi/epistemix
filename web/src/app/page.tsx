@@ -180,22 +180,23 @@ export default function HomePage() {
       <section className={styles.agents}>
         <div className={styles.agentContent}>
           <div className={styles.agentText}>
-            <h2>Two perspectives.<br />One arbiter.</h2>
+            <h2>Three agents.<br />One epistemic audit.</h2>
             <p>
-              After the full prediction, search, and extraction pipeline, two
-              independent agents audit the same evidence with different biases.
-              Agent&nbsp;&alpha; weights structural signals &mdash; language
+              After the prediction, search, and extraction pipeline, three
+              independent agents run on the same evidence.
+              Agent&nbsp;&alpha; audits structural signals &mdash; language
               spread, citation schools, publication channels, and knowledge
-              ecosystems blocked by access barriers. Agent&nbsp;&beta; weights
+              ecosystems blocked by access barriers. Agent&nbsp;&beta; audits
               epistemic signals &mdash; competing theories, disciplinary
-              breadth, confidence decay over time.
+              breadth, confidence decay over time. A third agent, the
+              Arbiter, compares their scored postulates directly.
             </p>
             <p>
-              An independent arbiter compares their scored postulates and maps
-              every divergence back to the original hypotheses. Disagreements
-              become <em>known unknowns</em> &mdash; the gaps a single-perspective
-              literature review could never surface, and the most actionable
-              output of the audit.
+              Every divergence between &alpha; and &beta; is mapped back to
+              the original hypotheses and ranked by severity. These
+              disagreements become <em>known unknowns</em> &mdash; provable
+              blind spots that no single-agent literature review could surface,
+              and the most actionable output of the audit.
             </p>
           </div>
           <div className={styles.agentViz}>
@@ -215,11 +216,11 @@ export default function HomePage() {
             </div>
             <div className={styles.vizSep} />
             <div className={styles.vizRow}>
-              <span className={styles.vizLabel}>Gap</span>
+              <span className={styles.vizLabel}>Arbiter</span>
               <div className={styles.vizTrack}>
-                <div className={styles.vizGap} />
+                <div className={styles.vizArbiter} />
               </div>
-              <span className={styles.vizVal}>14pt</span>
+              <span className={styles.vizVal}>62%</span>
             </div>
           </div>
         </div>
