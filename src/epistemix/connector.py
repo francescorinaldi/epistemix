@@ -85,6 +85,12 @@ class BaseConnector(ABC):
     ) -> list[SemanticRelation]:
         """Extract semantic relations from findings."""
 
+    @abstractmethod
+    def generate_localized_queries(
+        self, topic: str, language: str, discipline: str
+    ) -> list[str]:
+        """Generate culturally-appropriate localized queries via LLM."""
+
 
 # ============================================================
 # MOCK CONNECTOR (for tests)
@@ -101,6 +107,7 @@ class MockConnector(BaseConnector):
         self._responses: dict[str, list[Finding]] = {}
         self._call_log: list[SearchQuery] = []
         self._relations: list[SemanticRelation] = []
+        self._localized_queries: dict[str, list[str]] = {}
 
     def register_findings(
         self, pattern: str, findings: list[Finding]
@@ -152,6 +159,18 @@ class MockConnector(BaseConnector):
     ) -> list[SemanticRelation]:
         """Return pre-configured relations."""
         return self._relations
+
+    def register_localized_queries(
+        self, language: str, queries: list[str]
+    ) -> None:
+        """Pre-configure localized queries for a language."""
+        self._localized_queries[language] = queries
+
+    def generate_localized_queries(
+        self, topic: str, language: str, discipline: str
+    ) -> list[str]:
+        """Return pre-configured localized queries for a language."""
+        return self._localized_queries.get(language, [])
 
     @property
     def total_cost(self) -> float:
@@ -382,6 +401,50 @@ class ClaudeConnector(BaseConnector):
                 language="en",
             ))
         return relations
+
+    def generate_localized_queries(
+        self, topic: str, language: str, discipline: str
+    ) -> list[str]:
+        """Generate culturally-appropriate localized queries via Claude API.
+
+        Prompts the LLM to produce search queries in the target language
+        that reflect local academic conventions and terminology.
+        """
+        if self.total_cost >= self._max_budget:
+            return []
+
+        prompt = (
+            f"Generate 5 culturally-appropriate academic search queries "
+            f"in {language} for researching '{topic}' in the discipline "
+            f"of {discipline}.\n\n"
+            f"Requirements:\n"
+            f"- Queries must be written in the native script of {language}\n"
+            f"- Use terminology that local scholars would use\n"
+            f"- Include both formal/academic and common variants\n"
+            f"- Each query should be a realistic search string\n\n"
+            f"Return ONLY a JSON array of strings. No other text."
+        )
+
+        messages = [{"role": "user", "content": prompt}]
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": 1024,
+            "system": "You are a multilingual research assistant.",
+            "messages": messages,
+        }
+
+        try:
+            response = self._call_with_retry(kwargs)
+            self._call_count += 1
+            text = self._extract_text(response)
+            self._track_usage(response)
+
+            json_data = extract_json(text)
+            if isinstance(json_data, list):
+                return [str(item) for item in json_data if isinstance(item, str)]
+            return []
+        except Exception:
+            return []
 
     @property
     def total_cost(self) -> float:
