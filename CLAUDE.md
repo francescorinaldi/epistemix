@@ -210,6 +210,44 @@ Every feature follows this sequence — no exceptions:
 7. **Pull main**: `cd /Users/francescorinaldi/GitHub/epistemix && git fetch --prune && git pull`
 8. **Clean up**: `git worktree remove .worktrees/<name> --force && git branch -d feature/<name>`
 
+## Custom Agents (`.claude/agents/`)
+
+This project has 5 specialized agents in `.claude/agents/`. **Use them as teammates** when working on tasks that match their domain. They are project-scoped (only available in this repo).
+
+| Agent | File | Role | Can Edit? |
+|-------|------|------|-----------|
+| `epistemix-engine` | `epistemix-engine.md` | Core Python engine (models, meta-axioms, semantic graph, dual-agent) | Yes |
+| `epistemix-web` | `epistemix-web.md` | Next.js 15 frontend + API routes | Yes |
+| `epistemix-infra` | `epistemix-infra.md` | Supabase, Fly.io, CI/CD, Docker | Yes |
+| `epistemix-reviewer` | `epistemix-reviewer.md` | Read-only code reviewer (DAG, tests, RLS, types, security) | No |
+| `epistemix-planner` | `epistemix-planner.md` | Read-only architect + researcher (design docs, roadmap) | No |
+
+### When to use agents
+
+- **Single-layer task** (e.g., "add a field to models.py"): spawn `epistemix-engine` alone via `Task` tool with `subagent_type: "epistemix-engine"`.
+- **Cross-layer feature** (e.g., "add a new audit field end-to-end"): create a team via `TeamCreate`, then spawn multiple agents in parallel:
+  1. `epistemix-planner` → design document
+  2. `epistemix-engine` → Python model + `to_dict()`
+  3. `epistemix-infra` → migration + RLS
+  4. `epistemix-web` → TypeScript type + component
+  5. `epistemix-reviewer` → final quality check
+- **Code review**: spawn `epistemix-reviewer` after any significant change to verify DAG, tests, and type contracts.
+- **Planning/research**: spawn `epistemix-planner` before complex features to produce a design doc.
+
+### How to spawn
+
+```
+# Single agent
+Task(subagent_type="epistemix-engine", prompt="Add temporal_decay field to WeightedPostulate...")
+
+# As a team
+TeamCreate(team_name="epistemix-dev")
+Task(subagent_type="epistemix-engine", team_name="epistemix-dev", prompt="...")
+Task(subagent_type="epistemix-web", team_name="epistemix-dev", prompt="...")
+```
+
+All agents use `model: opus` and have the project's guardrails (zero-dep, DAG, RLS, etc.) built into their instructions.
+
 ## Current Status (v0.2.0)
 
 **Done:**
