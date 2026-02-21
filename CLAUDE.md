@@ -196,6 +196,19 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (5 metho
 - Do NOT create always-on infrastructure (everything scales to zero)
 - ALWAYS work in an isolated git worktree (`EnterWorktree`) when making changes — multiple Claude instances may be running in parallel on this repo. Never work directly on main.
 
+## Branch Workflow
+
+Every feature follows this sequence — no exceptions:
+
+1. **Worktree**: Create isolated worktree (`git worktree add .worktrees/<name> -b feature/<name>`)
+2. **Implement**: TDD, commit often, run full test suite
+3. **Push**: `git push -u origin feature/<name>`
+4. **PR**: `gh pr create` with summary + test plan
+5. **Review gate**: Wait for Copilot reviewer. If no comments → merge. If comments → fix first.
+6. **Merge**: `gh api -X PUT repos/.../pulls/<N>/merge -f merge_method=merge`
+7. **Pull main**: `cd /Users/francescorinaldi/GitHub/epistemix && git fetch --prune && git pull`
+8. **Clean up**: `git worktree remove .worktrees/<name> --force && git branch -d feature/<name>`
+
 ## Current Status (v0.2.0)
 
 **Done:**
