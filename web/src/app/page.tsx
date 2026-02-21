@@ -208,7 +208,7 @@ export default function HomePage() {
       </section>
 
       <footer className={styles.footer}>
-        <span>Epistemix v0.2.0</span>
+        <span>Epistemix v0.3.0</span>
         <span>MIT License</span>
       </footer>
     </main>
