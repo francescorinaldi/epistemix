@@ -17,7 +17,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-from epistemix.models import Finding, SearchQuery
+from epistemix.models import Finding, SearchQuery, SemanticRelation
 
 
 # ============================================================
@@ -67,6 +67,12 @@ class BaseConnector(ABC):
     def call_count(self) -> int:
         """Number of API calls made."""
 
+    @abstractmethod
+    def extract_relations(
+        self, findings: list[Finding]
+    ) -> list[SemanticRelation]:
+        """Extract semantic relations from findings."""
+
 
 # ============================================================
 # MOCK CONNECTOR (for tests)
@@ -82,6 +88,7 @@ class MockConnector(BaseConnector):
     def __init__(self) -> None:
         self._responses: dict[str, list[Finding]] = {}
         self._call_log: list[SearchQuery] = []
+        self._relations: list[SemanticRelation] = []
 
     def register_findings(
         self, pattern: str, findings: list[Finding]
@@ -121,6 +128,18 @@ class MockConnector(BaseConnector):
         for q in batch:
             all_findings.extend(self.execute_query(q))
         return all_findings
+
+    def register_relations(
+        self, relations: list[SemanticRelation]
+    ) -> None:
+        """Pre-configure relations for tests."""
+        self._relations = relations
+
+    def extract_relations(
+        self, findings: list[Finding]
+    ) -> list[SemanticRelation]:
+        """Return pre-configured relations."""
+        return self._relations
 
     @property
     def total_cost(self) -> float:
@@ -278,6 +297,79 @@ class ClaudeConnector(BaseConnector):
                 search_query_used=query.query,
             ))
         return findings
+
+    def extract_relations(
+        self, findings: list[Finding]
+    ) -> list[SemanticRelation]:
+        """Extract relations from findings via Claude API."""
+        if not findings or self.total_cost >= self._max_budget:
+            return []
+
+        entities: set[str] = set()
+        for f in findings:
+            if f.author:
+                entities.add(f.author)
+            entities.update(f.entities_mentioned)
+
+        if len(entities) < 2:
+            return []
+
+        entity_list = ", ".join(sorted(entities))
+        prompt = (
+            f"Given these entities related to research: {entity_list}\n\n"
+            "Identify semantic relations between them. "
+            "Return a JSON array where each object has:\n"
+            '- "source": entity name\n'
+            '- "target": entity name\n'
+            '- "relation": one of "supports", "contests", "contradicts", '
+            '"cites", "extends", "supervises", "coauthors", "translates"\n'
+            '- "confidence": float 0.0-1.0\n'
+            '- "evidence": brief textual justification\n\n'
+            "Return ONLY a JSON array."
+        )
+
+        messages = [{"role": "user", "content": prompt}]
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": 4096,
+            "system": SYSTEM_PROMPT,
+            "messages": messages,
+        }
+
+        try:
+            response = self._call_with_retry(kwargs)
+            self._call_count += 1
+            text = self._extract_text(response)
+            self._track_usage(response)
+            return self._parse_relations(text)
+        except Exception:
+            return []
+
+    def _parse_relations(self, text: str) -> list[SemanticRelation]:
+        """Parse JSON response into SemanticRelation objects."""
+        from epistemix.models import RelationType
+
+        json_data = extract_json(text)
+        if not json_data or not isinstance(json_data, list):
+            return []
+
+        valid_types = {rt.value for rt in RelationType}
+        relations: list[SemanticRelation] = []
+        for item in json_data:
+            if not isinstance(item, dict):
+                continue
+            rel_type = item.get("relation", "")
+            if rel_type not in valid_types:
+                continue
+            relations.append(SemanticRelation(
+                source=item.get("source", ""),
+                target=item.get("target", ""),
+                relation=RelationType(rel_type),
+                confidence=float(item.get("confidence", 0.5)),
+                evidence=item.get("evidence", ""),
+                language="en",
+            ))
+        return relations
 
     @property
     def total_cost(self) -> float:

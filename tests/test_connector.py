@@ -1,7 +1,7 @@
 """Tests for the connector module."""
 
 from epistemix.connector import MockConnector, extract_json
-from epistemix.models import Finding, GapType, SearchQuery, Severity
+from epistemix.models import Finding, GapType, RelationType, SearchQuery, SemanticRelation, Severity
 
 
 class TestMockConnector:
@@ -68,6 +68,27 @@ class TestMockConnector:
         q = SearchQuery(query="test", language="en")
         connector.execute_query(q)
         assert len(connector.call_log) == 1
+
+
+class TestMockConnectorRelations:
+    def test_extract_relations_returns_registered(self):
+        connector = MockConnector()
+        relations = [
+            SemanticRelation(
+                source="Alice", target="Bob",
+                relation=RelationType.CITES, confidence=0.9,
+                evidence="Alice cites Bob", language="en",
+            ),
+        ]
+        connector.register_relations(relations)
+        result = connector.extract_relations([])
+        assert len(result) == 1
+        assert result[0].source == "Alice"
+
+    def test_extract_relations_empty_by_default(self):
+        connector = MockConnector()
+        result = connector.extract_relations([])
+        assert result == []
 
 
 class TestExtractJson:
