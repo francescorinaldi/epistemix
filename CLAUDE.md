@@ -195,6 +195,7 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (5 metho
 - Do NOT use `git push --force` on main
 - Do NOT create always-on infrastructure (everything scales to zero)
 - ALWAYS work in an isolated git worktree (`EnterWorktree`) when making changes — multiple Claude instances may be running in parallel on this repo. Never work directly on main.
+- ALWAYS delete feature branches and worktrees after a PR is merged. Never leave stale branches behind.
 
 ## Branch Workflow
 
