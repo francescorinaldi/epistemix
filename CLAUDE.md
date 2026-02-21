@@ -185,6 +185,7 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (4 metho
 - Do NOT modify test fixtures in `conftest.py` without running all 171 tests
 - Do NOT use `git push --force` on main
 - Do NOT create always-on infrastructure (everything scales to zero)
+- ALWAYS work in an isolated git worktree (`EnterWorktree`) when making changes — multiple Claude instances may be running in parallel on this repo. Never work directly on main.
 
 ## Current Status (v0.2.0)
 

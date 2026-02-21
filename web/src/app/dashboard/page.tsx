@@ -12,6 +12,7 @@ export default function DashboardPage() {
   const { user, profile, loading: authLoading } = useAuth();
   const [audits, setAudits] = useState<Audit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -32,6 +33,22 @@ export default function DashboardPage() {
 
     fetchAudits();
   }, [user, authLoading, router]);
+
+  async function handleDelete(auditId: string) {
+    if (!confirm("Delete this audit? This cannot be undone.")) return;
+    setDeleting(auditId);
+    try {
+      const res = await fetch(`/api/v1/audits/${auditId}`, { method: "DELETE" });
+      if (res.ok) {
+        setAudits((prev) => prev.filter((a) => a.id !== auditId));
+      } else {
+        const body = await res.json().catch(() => null);
+        alert(body?.error ?? "Failed to delete audit.");
+      }
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   if (authLoading || loading) {
     return (
@@ -101,44 +118,55 @@ export default function DashboardPage() {
             const anomalies = Array.isArray(audit.anomalies) ? audit.anomalies : [];
 
             return (
-              <Link
-                key={audit.id}
-                href={`/audit/${audit.id}`}
-                className="card"
-              >
+              <div key={audit.id} className="card">
                 <div className="card-header">
                   <span className={`status status-${audit.status}`}>
                     {audit.status}
                   </span>
-                  <span className="date">
-                    {new Date(audit.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                <h3 className="topic">{audit.topic}</h3>
-                <p className="meta">
-                  {audit.country} &middot; {audit.discipline}
-                </p>
-                <div className="stats-row">
-                  <div className="stat">
-                    <span className="stat-val">
-                      {lastCoverage?.percentage ?? 0}%
+                  <div className="card-header-right">
+                    <span className="date">
+                      {new Date(audit.created_at).toLocaleDateString()}
                     </span>
-                    <span className="stat-lbl">Coverage</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-val">
-                      {findings.length}
-                    </span>
-                    <span className="stat-lbl">Findings</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-val">
-                      {anomalies.length}
-                    </span>
-                    <span className="stat-lbl">Anomalies</span>
+                    {(audit.status === "complete" || audit.status === "failed") && (
+                      <button
+                        className="delete-btn"
+                        onClick={() => handleDelete(audit.id)}
+                        disabled={deleting === audit.id}
+                        title="Delete audit"
+                        aria-label="Delete audit"
+                      >
+                        {deleting === audit.id ? "..." : "\u00d7"}
+                      </button>
+                    )}
                   </div>
                 </div>
-              </Link>
+                <Link href={`/audit/${audit.id}`} className="card-link">
+                  <h3 className="topic">{audit.topic}</h3>
+                  <p className="meta">
+                    {audit.country} &middot; {audit.discipline}
+                  </p>
+                  <div className="stats-row">
+                    <div className="stat">
+                      <span className="stat-val">
+                        {lastCoverage?.percentage ?? 0}%
+                      </span>
+                      <span className="stat-lbl">Coverage</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-val">
+                        {findings.length}
+                      </span>
+                      <span className="stat-lbl">Findings</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-val">
+                        {anomalies.length}
+                      </span>
+                      <span className="stat-lbl">Anomalies</span>
+                    </div>
+                  </div>
+                </Link>
+              </div>
             );
           })}
         </div>
@@ -263,15 +291,43 @@ export default function DashboardPage() {
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius-lg);
           padding: 2rem;
-          display: block;
-          color: inherit;
-          text-decoration: none;
           transition: border-color 0.3s;
         }
         .card:hover {
           border-color: var(--border-default);
+        }
+        .card-link {
+          display: block;
+          color: inherit;
+          text-decoration: none;
+        }
+        .card-link:hover {
           text-decoration: none;
           color: inherit;
+        }
+        .card-header-right {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .delete-btn {
+          background: none;
+          border: 1px solid transparent;
+          border-radius: var(--radius-md);
+          color: var(--text-ghost);
+          font-size: 1rem;
+          line-height: 1;
+          padding: 0.125rem 0.375rem;
+          cursor: pointer;
+          transition: color 0.2s, border-color 0.2s;
+        }
+        .delete-btn:hover {
+          color: var(--danger, #e55);
+          border-color: var(--danger, #e55);
+        }
+        .delete-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
         }
 
         .card-header {
