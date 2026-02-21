@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 /**
- * GET  /api/v1/audits/:id — Get audit status and results
- * POST /api/v1/audits/:id — Stop an audit early (action=stop)
+ * GET    /api/v1/audits/:id — Get audit status and results
+ * POST   /api/v1/audits/:id — Stop an audit early (action=stop)
+ * DELETE /api/v1/audits/:id — Delete an audit (not running)
  */
 
 export async function GET(
@@ -81,6 +82,61 @@ export async function POST(
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
     console.error("POST /api/v1/audits/:id error:", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check audit exists and is not running
+    const { data: audit } = await supabase
+      .from("audits")
+      .select("id, status")
+      .eq("id", id)
+      .single();
+
+    if (!audit) {
+      return NextResponse.json({ error: "Audit not found" }, { status: 404 });
+    }
+
+    if ((audit as { status: string }).status === "running") {
+      return NextResponse.json(
+        { error: "Cannot delete a running audit. Stop it first." },
+        { status: 409 }
+      );
+    }
+
+    const { error } = await supabase
+      .from("audits")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      return NextResponse.json(
+        { error: "Failed to delete audit" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, message: "Audit deleted" });
+  } catch (err) {
+    console.error("DELETE /api/v1/audits/:id error:", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
