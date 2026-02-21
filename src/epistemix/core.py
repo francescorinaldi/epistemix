@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from epistemix.models import (
+    AccessTier,
     Anomaly,
     CoverageBreakdown,
     CycleSnapshot,
@@ -788,8 +789,8 @@ class DynamicInferenceEngine:
 
         for lang in primary_langs:
             eco = LANGUAGE_ECOSYSTEMS.get(lang)
-            if eco is None:
-                continue  # open_web, no barrier expectation needed
+            if eco is None or eco.access_tier == AccessTier.OPEN_WEB:
+                continue
 
             db_list = ", ".join(eco.gated_databases[:3])
             expectations.append(Expectation(
@@ -1053,25 +1054,22 @@ def calculate_coverage(
     penalty_norm = min(penalty, 30)
     accessible_score = max(base - penalty_norm, 0.0)
 
-    # Estimated unreachable: parse gated share from barrier expectation descriptions
-    import re
+    # Estimated unreachable: look up gated share from LANGUAGE_ECOSYSTEMS
     barrier_annotations: list[str] = []
     total_gated = 0.0
     gated_met = sum(1 for e in barrier_exps if e.met)
 
     for exp in barrier_exps:
-        match = re.search(r"(\d+)% gated", exp.description)
-        if match:
-            share = int(match.group(1))
-            total_gated += share
-            lang_match = re.search(r"\((\w+),", exp.description)
-            lang_code = lang_match.group(1) if lang_match else "unknown"
-            eco = LANGUAGE_ECOSYSTEMS.get(lang_code)
-            if eco:
+        # Find the language code by checking which ecosystem matches
+        for lang_code, eco in LANGUAGE_ECOSYSTEMS.items():
+            if f"({lang_code}," in exp.description:
+                share = eco.estimated_gated_share * 100
+                total_gated += share
                 db_names = ", ".join(eco.gated_databases[:2])
                 barrier_annotations.append(
-                    f"{lang_code.upper()}: ~{share}% behind {db_names}"
+                    f"{lang_code.upper()}: ~{share:.0f}% behind {db_names}"
                 )
+                break
 
     estimated_unreachable = total_gated / max(len(barrier_exps), 1) if barrier_exps else 0.0
 
