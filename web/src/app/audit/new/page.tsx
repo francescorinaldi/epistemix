@@ -57,20 +57,22 @@ export default function NewAuditPage() {
           padding: 0 2rem 4rem;
         }
         nav {
-          padding: 1.5rem 0;
+          padding: 2rem 0;
         }
         nav :global(.back) {
           font-family: var(--font-mono);
-          font-size: 0.8125rem;
+          font-size: 0.6875rem;
           color: var(--text-tertiary);
           text-decoration: none;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           transition: color 0.2s;
         }
         nav :global(.back:hover) {
           color: var(--text-primary);
         }
         .content {
-          padding-top: 2rem;
+          padding-top: 3rem;
         }
         h1 {
           font-family: var(--font-display);
@@ -78,16 +80,16 @@ export default function NewAuditPage() {
           font-weight: 400;
           text-align: center;
           color: var(--text-heading);
-          margin-bottom: 0.5rem;
+          margin: 0 0 0.5rem;
         }
         .subtitle {
           text-align: center;
           color: var(--text-secondary);
-          max-width: 440px;
-          margin: 0 auto 3rem;
+          max-width: 400px;
+          margin: 0 auto 3.5rem;
           font-family: var(--font-body);
-          font-size: 0.9375rem;
-          line-height: 1.6;
+          font-size: 0.875rem;
+          line-height: 1.7;
         }
       `}</style>
     </main>

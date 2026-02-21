@@ -1,73 +1,70 @@
 /* ============================================================
    EPISTEMIX — Design System
-   Aesthetic: Scientific Cartography
+   Aesthetic: Refined Minimalism
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
   /* Backgrounds */
-  --bg-deep: #070a0f;
-  --bg-page: #0b0e15;
-  --bg-card: #10141d;
-  --bg-elevated: #171c28;
-  --bg-hover: #1e2436;
+  --bg-page: #0a0d12;
+  --bg-card: #0f1218;
+  --bg-elevated: #141820;
+  --bg-hover: #1a1f29;
 
   /* Borders */
   --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-default: rgba(255, 255, 255, 0.07);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-default: rgba(255, 255, 255, 0.08);
 
   /* Text */
-  --text-heading: #ede8dc;
-  --text-primary: #d4cfc2;
-  --text-secondary: #8a8172;
-  --text-tertiary: #5c5548;
-  --text-ghost: #3d3830;
+  --text-heading: #f0ece4;
+  --text-primary: #c8c3b8;
+  --text-secondary: #7d7770;
+  --text-tertiary: #4a4540;
+  --text-ghost: #2e2a26;
 
-  /* Accent — warm gold */
-  --accent: #c9a555;
-  --accent-bright: #dbb865;
-  --accent-dim: #8f7438;
-  --accent-bg: rgba(201, 165, 85, 0.06);
-  --accent-border: rgba(201, 165, 85, 0.18);
+  /* Accent — muted gold */
+  --accent: #b89b5a;
+  --accent-bright: #ccad68;
+  --accent-dim: #8a7340;
+  --accent-bg: rgba(184, 155, 90, 0.06);
+  --accent-border: rgba(184, 155, 90, 0.12);
 
   /* Semantic */
   --success: #5a9a6b;
-  --success-bg: rgba(90, 154, 107, 0.08);
-  --success-border: rgba(90, 154, 107, 0.2);
-  --warning: #d4943a;
-  --warning-bg: rgba(212, 148, 58, 0.08);
-  --warning-border: rgba(212, 148, 58, 0.2);
-  --danger: #c45a52;
-  --danger-bg: rgba(196, 90, 82, 0.08);
-  --danger-border: rgba(196, 90, 82, 0.2);
+  --success-bg: rgba(90, 154, 107, 0.06);
+  --success-border: rgba(90, 154, 107, 0.12);
+  --warning: #c8923a;
+  --warning-bg: rgba(200, 146, 58, 0.06);
+  --warning-border: rgba(200, 146, 58, 0.12);
+  --danger: #b85450;
+  --danger-bg: rgba(184, 84, 80, 0.06);
+  --danger-border: rgba(184, 84, 80, 0.12);
   --info: #5a8fb5;
-  --info-bg: rgba(90, 143, 181, 0.08);
-  --info-border: rgba(90, 143, 181, 0.2);
+  --info-bg: rgba(90, 143, 181, 0.06);
+  --info-border: rgba(90, 143, 181, 0.12);
 
   /* Chart palette */
   --chart-1: #5a8fb5;
-  --chart-2: #c9a555;
+  --chart-2: #b89b5a;
   --chart-3: #5a9a6b;
-  --chart-4: #9a6bc4;
-  --chart-5: #c45a52;
+  --chart-4: #8a6bb5;
+  --chart-5: #b85450;
   --chart-6: #4ab5a5;
 
   /* Fonts */
-  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
   --font-body: 'DM Sans', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
 
   /* Radii */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 
   /* Shadows */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.15);
-  --shadow-elevated: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 /* ---- Reset ---- */
@@ -93,47 +90,13 @@ body {
   min-height: 100vh;
 }
 
-/* Dot grid background */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.018) 1px, transparent 1px);
-  background-size: 32px 32px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Noise texture overlay */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 0;
-}
-
-#app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  z-index: 1;
-}
-
 /* ---- Typography ---- */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
   color: var(--text-heading);
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1.15;
 }
-
-h1 { font-size: 2.75rem; }
-h2 { font-size: 1.75rem; }
-h3 { font-size: 1.125rem; }
 
 /* ---- Links ---- */
 a {
@@ -145,35 +108,27 @@ a:hover {
   color: var(--accent-bright);
 }
 
-/* ---- Focus styles ---- */
+/* ---- Focus ---- */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 1.5px solid var(--accent);
   outline-offset: 2px;
 }
 
 /* ---- Scrollbar ---- */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.1);
 }
 
 /* ---- Selection ---- */
 ::selection {
-  background: rgba(201, 165, 85, 0.25);
+  background: rgba(184, 155, 90, 0.2);
   color: var(--text-heading);
-}
-
-/* ---- Utility classes ---- */
-.mono {
-  font-family: var(--font-mono);
 }

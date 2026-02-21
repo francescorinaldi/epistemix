@@ -69,18 +69,18 @@ export default function CitationGraph({ findings }: Props) {
         .selectAll("line")
         .data(links)
         .join("line")
-        .attr("stroke", "rgba(255,255,255,0.06)")
-        .attr("stroke-width", 1);
+        .attr("stroke", "rgba(255,255,255,0.04)")
+        .attr("stroke-width", 0.5);
 
       const node = svg
         .append("g")
         .selectAll("circle")
         .data(nodes)
         .join("circle")
-        .attr("r", (d: any) => Math.max(5, Math.min(15, 5 + d.citations * 2)))
+        .attr("r", (d: any) => Math.max(4, Math.min(12, 4 + d.citations * 2)))
         .attr("fill", (d: any) => colorScale[d.type] || "var(--text-tertiary)")
-        .attr("stroke", "var(--bg-card)")
-        .attr("stroke-width", 1.5);
+        .attr("stroke", "var(--bg-page)")
+        .attr("stroke-width", 1);
 
       const label = svg
         .append("g")
@@ -88,9 +88,10 @@ export default function CitationGraph({ findings }: Props) {
         .data(nodes)
         .join("text")
         .text((d: any) => d.id.length > 15 ? d.id.slice(0, 15) + "..." : d.id)
-        .attr("font-size", 8)
-        .attr("fill", "var(--text-tertiary)")
-        .attr("dx", 12)
+        .attr("font-size", 7)
+        .attr("font-family", "var(--font-body)")
+        .attr("fill", "var(--text-ghost)")
+        .attr("dx", 10)
         .attr("dy", 3);
 
       // Add tooltip on hover
@@ -122,20 +123,22 @@ export default function CitationGraph({ findings }: Props) {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius-lg);
-          padding: 1.5rem;
+          padding: 2rem;
           overflow: hidden;
         }
         h3 {
           font-family: var(--font-display);
-          font-size: 1.125rem;
+          font-size: 1rem;
           color: var(--text-heading);
-          margin: 0 0 1rem 0;
+          margin: 0 0 1.25rem 0;
           font-weight: 400;
         }
         .empty {
           color: var(--text-ghost);
+          font-family: var(--font-body);
+          font-size: 0.8125rem;
           text-align: center;
-          padding: 2rem;
+          padding: 3rem 2rem;
         }
       `}</style>
     </div>

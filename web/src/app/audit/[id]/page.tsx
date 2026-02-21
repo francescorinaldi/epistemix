@@ -22,7 +22,7 @@ export default function AuditPage({
     return (
       <div className="center">
         <div className="spinner" />
-        <p className="loading-text">Loading audit...</p>
+        <p className="loading-text">Loading audit</p>
         <style jsx>{`
           .center {
             display: flex;
@@ -30,21 +30,23 @@ export default function AuditPage({
             align-items: center;
             justify-content: center;
             min-height: 60vh;
-            padding: 4rem 2rem;
+            padding: 4rem 2.5rem;
           }
           .spinner {
-            width: 24px;
-            height: 24px;
-            border: 2px solid var(--bg-hover);
-            border-top-color: var(--accent);
+            width: 20px;
+            height: 20px;
+            border: 1.5px solid var(--border-default);
+            border-top-color: var(--accent-dim);
             border-radius: 50%;
             margin-bottom: 1rem;
-            animation: spin 0.8s linear infinite;
+            animation: spin 1s linear infinite;
           }
           .loading-text {
             font-family: var(--font-mono);
-            font-size: 0.8125rem;
+            font-size: 0.75rem;
             color: var(--text-tertiary);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
           }
           @keyframes spin {
             to { transform: rotate(360deg); }
@@ -66,19 +68,21 @@ export default function AuditPage({
             align-items: center;
             justify-content: center;
             min-height: 60vh;
-            padding: 4rem 2rem;
+            padding: 4rem 2.5rem;
             gap: 1rem;
           }
           .error-text {
             font-family: var(--font-mono);
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
             color: var(--danger);
+            letter-spacing: 0.02em;
           }
           .back-link {
             font-family: var(--font-mono);
-            font-size: 0.8125rem;
+            font-size: 0.75rem;
             color: var(--text-tertiary);
-            transition: color 0.15s;
+            transition: color 0.2s;
+            letter-spacing: 0.02em;
           }
           .back-link:hover {
             color: var(--text-primary);
@@ -117,12 +121,11 @@ export default function AuditPage({
           {audit.country} &middot; {audit.discipline} &middot;{" "}
           {audit.max_cycles} cycles
         </p>
-        <div className="meta-line" />
       </header>
 
       {audit.status === "failed" && (
         <div className="error-banner">
-          <strong>Audit failed:</strong> {audit.error_message}
+          <span className="error-label">Failed</span> {audit.error_message}
         </div>
       )}
 
@@ -175,15 +178,15 @@ export default function AuditPage({
       {isRunning && (
         <div className="running-indicator">
           <div className="pulse-dot" />
-          Audit in progress &mdash; results update in real-time
+          Audit in progress
         </div>
       )}
 
       <style jsx>{`
         main {
-          max-width: 1200px;
+          max-width: 1100px;
           margin: 0 auto;
-          padding: 0 2rem 4rem;
+          padding: 0 2.5rem 5rem;
           position: relative;
           z-index: 1;
         }
@@ -193,14 +196,17 @@ export default function AuditPage({
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 1.5rem 0;
+          padding: 2rem 0;
+          border-bottom: 1px solid var(--border-subtle);
+          margin-bottom: 1rem;
         }
         .back {
           font-family: var(--font-mono);
-          font-size: 0.8125rem;
+          font-size: 0.75rem;
           color: var(--text-tertiary);
           text-decoration: none;
-          transition: color 0.15s;
+          letter-spacing: 0.02em;
+          transition: color 0.2s;
         }
         .back:hover {
           color: var(--text-primary);
@@ -209,142 +215,138 @@ export default function AuditPage({
         /* ---- Status badges ---- */
         .status-badge {
           font-family: var(--font-mono);
-          font-size: 0.6875rem;
-          font-weight: 600;
+          font-size: 0.625rem;
+          font-weight: 500;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
-          padding: 0.25rem 0.75rem;
+          letter-spacing: 0.08em;
+          padding: 0.1875rem 0.625rem;
           border-radius: 999px;
         }
         .status-pending {
           background: var(--warning-bg);
-          border: 1px solid var(--warning-border);
           color: var(--warning);
         }
         .status-running {
           background: var(--info-bg);
-          border: 1px solid var(--info-border);
           color: var(--info);
         }
         .status-complete {
           background: var(--success-bg);
-          border: 1px solid var(--success-border);
           color: var(--success);
         }
         .status-failed {
           background: var(--danger-bg);
-          border: 1px solid var(--danger-border);
           color: var(--danger);
         }
 
         /* ---- Header ---- */
         header {
-          margin-bottom: 2rem;
+          margin: 2.5rem 0 2.5rem;
         }
         h1 {
           font-family: var(--font-display);
-          font-size: 2rem;
+          font-size: 2.25rem;
           font-weight: 400;
           color: var(--text-heading);
-          margin-bottom: 0.375rem;
+          margin-bottom: 0.5rem;
           line-height: 1.2;
         }
         .meta {
+          font-family: var(--font-body);
           font-size: 0.875rem;
           color: var(--text-tertiary);
-        }
-        .meta-line {
-          margin-top: 0.75rem;
-          height: 1px;
-          background: linear-gradient(
-            to right,
-            var(--accent-border),
-            transparent 60%
-          );
+          letter-spacing: 0.01em;
         }
 
         /* ---- Error banner ---- */
         .error-banner {
           background: var(--danger-bg);
-          border: 1px solid var(--danger-border);
-          color: var(--danger);
-          padding: 1rem;
+          color: var(--text-primary);
+          padding: 1rem 1.25rem;
           border-radius: var(--radius-md);
-          margin-bottom: 1.5rem;
-          font-size: 0.875rem;
+          margin-bottom: 2rem;
+          font-family: var(--font-body);
+          font-size: 0.8125rem;
+          line-height: 1.5;
+        }
+        .error-label {
+          font-family: var(--font-mono);
+          font-size: 0.6875rem;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--danger);
+          margin-right: 0.5rem;
         }
 
         /* ---- Summary stats ---- */
         .summary {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 1rem;
-          margin-bottom: 2rem;
+          gap: 1.5rem;
+          margin-bottom: 3rem;
+          padding: 2rem 0;
+          border-top: 1px solid var(--border-subtle);
+          border-bottom: 1px solid var(--border-subtle);
         }
         .stat {
-          background: var(--bg-card);
-          border: 1px solid var(--border-subtle);
-          border-radius: var(--radius-lg);
-          padding: 1.25rem;
           text-align: center;
         }
         .stat-value {
           font-family: var(--font-mono);
-          font-size: 1.75rem;
-          font-weight: 700;
+          font-size: 1.5rem;
+          font-weight: 600;
           color: var(--text-heading);
           line-height: 1;
         }
         .stat-label {
           font-family: var(--font-mono);
-          font-size: 0.625rem;
+          font-size: 0.5625rem;
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.1em;
           color: var(--text-tertiary);
-          margin-top: 0.25rem;
+          margin-top: 0.375rem;
         }
 
         /* ---- Grid ---- */
         .grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 1.25rem;
+          gap: 1.5rem;
         }
         .col {
           display: flex;
           flex-direction: column;
-          gap: 1.25rem;
+          gap: 1.5rem;
         }
 
         /* ---- Running indicator ---- */
         .running-indicator {
           position: fixed;
-          bottom: 1.5rem;
-          right: 1.5rem;
+          bottom: 2rem;
+          right: 2rem;
           background: var(--bg-elevated);
-          border: 1px solid var(--info-border);
-          color: var(--info);
-          padding: 0.625rem 1rem;
+          border: 1px solid var(--border-default);
+          color: var(--text-secondary);
+          padding: 0.5rem 1rem;
           border-radius: 999px;
           font-family: var(--font-mono);
-          font-size: 0.75rem;
+          font-size: 0.6875rem;
           letter-spacing: 0.04em;
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          box-shadow: var(--shadow-elevated);
           z-index: 50;
         }
         .pulse-dot {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
-          background: var(--info);
-          animation: pulse 1.5s ease-in-out infinite;
+          background: var(--accent-dim);
+          animation: pulse 2s ease-in-out infinite;
         }
         @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
+          50% { opacity: 0.25; }
         }
 
         /* ---- Responsive ---- */
