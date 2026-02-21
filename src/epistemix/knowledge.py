@@ -11,6 +11,8 @@ To improve entity classification: update the KNOWN_* sets.
 
 from __future__ import annotations
 
+from epistemix.models import AccessTier, LanguageEcosystem
+
 
 # ============================================================
 # GEOGRAPHIC-LINGUISTIC AXIOMS
@@ -93,6 +95,26 @@ GEOGRAPHIC_LINGUISTIC: dict[str, dict] = {
             "en": "British institutions",
             "fr": "French institutions",
         },
+        "transliteration_map": {},
+    },
+    "China": {
+        "primary_languages": ["zh", "en"],
+        "foreign_traditions": {},
+        "transliteration_map": {},
+    },
+    "Japan": {
+        "primary_languages": ["ja", "en"],
+        "foreign_traditions": {},
+        "transliteration_map": {},
+    },
+    "South Korea": {
+        "primary_languages": ["ko", "en"],
+        "foreign_traditions": {},
+        "transliteration_map": {},
+    },
+    "Saudi Arabia": {
+        "primary_languages": ["ar", "en"],
+        "foreign_traditions": {},
         "transliteration_map": {},
     },
 }
@@ -179,6 +201,68 @@ KNOWN_PLACES: set[str] = {
     "amphipolis", "vergina", "pella", "thessaloniki",
     "aigai", "athens", "dion", "babylon", "susa",
     "alexandria", "sidon", "anfipoli",
+}
+
+
+# ============================================================
+# LANGUAGE ECOSYSTEM REGISTRY (access-barrier reasoning)
+# ============================================================
+
+LANGUAGE_ECOSYSTEMS: dict[str, LanguageEcosystem] = {
+    "zh": LanguageEcosystem(
+        language="zh",
+        access_tier=AccessTier.WALLED_GARDEN,
+        gated_databases=("CNKI", "Wanfang", "VIP", "CQVIP"),
+        estimated_gated_share=0.70,
+        query_style="phrasal",
+        script="cjk",
+    ),
+    "ar": LanguageEcosystem(
+        language="ar",
+        access_tier=AccessTier.PARTIAL_ACCESS,
+        gated_databases=("Al-Manhal", "E-Marefa", "Dar Al Mandumah"),
+        estimated_gated_share=0.35,
+        query_style="morphological",
+        script="arabic",
+    ),
+    "ja": LanguageEcosystem(
+        language="ja",
+        access_tier=AccessTier.PARTIAL_ACCESS,
+        gated_databases=("CiNii", "J-STAGE", "NDL Digital"),
+        estimated_gated_share=0.40,
+        query_style="phrasal",
+        script="cjk",
+    ),
+    "ko": LanguageEcosystem(
+        language="ko",
+        access_tier=AccessTier.PARTIAL_ACCESS,
+        gated_databases=("RISS", "KCI", "DBpia"),
+        estimated_gated_share=0.35,
+        query_style="phrasal",
+        script="hangul",
+    ),
+}
+
+
+# ============================================================
+# CROSS-LANGUAGE STRATEGIES (indirect access to gated ecosystems)
+# ============================================================
+
+CROSS_LANGUAGE_STRATEGIES: dict[str, list[tuple[str, str]]] = {
+    "zh": [
+        ("en", "Chinese research on {topic}"),
+        ("ja", "{topic} 中国の研究"),
+    ],
+    "ar": [
+        ("en", "Arabic-language research on {topic}"),
+        ("fr", "recherche arabophone sur {topic}"),
+    ],
+    "ja": [
+        ("en", "Japanese research on {topic}"),
+    ],
+    "ko": [
+        ("en", "Korean research on {topic}"),
+    ],
 }
 
 

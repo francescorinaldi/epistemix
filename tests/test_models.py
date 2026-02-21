@@ -1,13 +1,16 @@
 """Tests for Epistemix data models."""
 
 from epistemix.models import (
+    AccessTier,
     Anomaly,
+    CoverageBreakdown,
     CycleSnapshot,
     Entity,
     EntityType,
     Expectation,
     Finding,
     GapType,
+    LanguageEcosystem,
     RelationType,
     SearchQuery,
     SemanticRelation,
@@ -297,3 +300,88 @@ class TestSemanticRelation:
         assert d["confidence"] == 0.8
         assert d["language"] == "it"
         assert d["cycle"] == 2
+
+
+class TestAccessTier:
+    def test_all_tiers_exist(self):
+        assert AccessTier.OPEN_WEB.value == "open_web"
+        assert AccessTier.PARTIAL_ACCESS.value == "partial_access"
+        assert AccessTier.WALLED_GARDEN.value == "walled_garden"
+
+    def test_tier_count(self):
+        assert len(AccessTier) == 3
+
+
+class TestLanguageEcosystem:
+    def test_creation(self):
+        eco = LanguageEcosystem(
+            language="zh",
+            access_tier=AccessTier.WALLED_GARDEN,
+            gated_databases=("CNKI", "Wanfang"),
+            estimated_gated_share=0.70,
+            query_style="phrasal",
+            script="cjk",
+        )
+        assert eco.language == "zh"
+        assert eco.access_tier == AccessTier.WALLED_GARDEN
+        assert "CNKI" in eco.gated_databases
+
+    def test_frozen(self):
+        eco = LanguageEcosystem(
+            language="ar",
+            access_tier=AccessTier.PARTIAL_ACCESS,
+            gated_databases=("Al-Manhal",),
+            estimated_gated_share=0.35,
+            query_style="morphological",
+            script="arabic",
+        )
+        try:
+            eco.language = "en"
+            assert False, "Should be frozen"
+        except AttributeError:
+            pass
+
+    def test_to_dict(self):
+        eco = LanguageEcosystem(
+            language="zh",
+            access_tier=AccessTier.WALLED_GARDEN,
+            gated_databases=("CNKI", "Wanfang"),
+            estimated_gated_share=0.70,
+            query_style="phrasal",
+            script="cjk",
+        )
+        d = eco.to_dict()
+        assert d["language"] == "zh"
+        assert d["access_tier"] == "walled_garden"
+        assert d["gated_databases"] == ["CNKI", "Wanfang"]
+        assert d["estimated_gated_share"] == 0.70
+        assert d["query_style"] == "phrasal"
+        assert d["script"] == "cjk"
+
+
+class TestCoverageBreakdown:
+    def test_defaults(self):
+        cb = CoverageBreakdown(accessible_score=45.0, estimated_unreachable=30.0)
+        assert cb.barrier_annotations == []
+        assert cb.gated_expectations_count == 0
+        assert cb.gated_expectations_met == 0
+
+    def test_to_dict(self):
+        cb = CoverageBreakdown(
+            accessible_score=45.5,
+            estimated_unreachable=30.3,
+            barrier_annotations=["CNKI not searchable"],
+            gated_expectations_count=5,
+            gated_expectations_met=2,
+        )
+        d = cb.to_dict()
+        assert d["accessible_score"] == 45.5
+        assert d["estimated_unreachable"] == 30.3
+        assert d["barrier_annotations"] == ["CNKI not searchable"]
+        assert d["gated_expectations_count"] == 5
+        assert d["gated_expectations_met"] == 2
+
+
+class TestAccessBarrierGapType:
+    def test_access_barrier_gap_type(self):
+        assert GapType.ACCESS_BARRIER.value == "access_barrier"

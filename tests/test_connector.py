@@ -116,3 +116,24 @@ class TestExtractJson:
         text = "```json\n{invalid}\n```"
         result = extract_json(text)
         assert result is None
+
+
+class TestMockConnectorLocalizedQueries:
+    def test_register_and_generate(self):
+        connector = MockConnector()
+        connector.register_localized_queries("ar", [
+            "\u0628\u062d\u062b \u0623\u062b\u0631\u064a",
+            "\u062f\u0631\u0627\u0633\u0629 \u0639\u0644\u0645 \u0627\u0644\u0622\u062b\u0627\u0631",
+        ])
+        queries = connector.generate_localized_queries(
+            "archaeology", "ar", "archaeology",
+        )
+        assert len(queries) == 2
+        assert "\u0628\u062d\u062b \u0623\u062b\u0631\u064a" in queries
+
+    def test_unregistered_language_returns_empty(self):
+        connector = MockConnector()
+        queries = connector.generate_localized_queries(
+            "archaeology", "zh", "archaeology",
+        )
+        assert queries == []

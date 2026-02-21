@@ -25,7 +25,9 @@ from __future__ import annotations
 from typing import Any
 
 from epistemix.models import (
+    AccessTier,
     Anomaly,
+    CoverageBreakdown,
     CycleSnapshot,
     Entity,
     EntityType,
@@ -40,10 +42,12 @@ from epistemix.models import (
 from epistemix.knowledge import (
     GEOGRAPHIC_LINGUISTIC,
     KNOWN_TRANSLITERATIONS,
+    LANGUAGE_ECOSYSTEMS,
     STOPWORDS,
     TRANSLITERATIONS,
     classify_entity_name,
 )
+from epistemix.query_localization import localize_query
 from epistemix.semantic_graph import SemanticGraph
 
 
@@ -361,20 +365,33 @@ class MultilingualQueryGenerator:
                     target_gap=GapType.LINGUISTIC,
                 ))
             else:
-                # Translate key terms if possible
-                translated_terms = []
-                for term in self._extract_key_terms(topic):
-                    translated = self._transliterate(term, lang)
-                    translated_terms.append(translated)
-                if translated_terms:
-                    q = " ".join(translated_terms)
-                    queries.append(SearchQuery(
-                        query=q,
-                        language=lang,
-                        rationale=f"Seed query in {lang} for {topic}",
-                        priority=Severity.HIGH,
-                        target_gap=GapType.LINGUISTIC,
-                    ))
+                eco = LANGUAGE_ECOSYSTEMS.get(lang)
+                if eco and eco.query_style != "keyword":
+                    # Use localized query generation for non-keyword languages
+                    localized = localize_query(topic, lang, discipline)
+                    for lq in localized:
+                        queries.append(SearchQuery(
+                            query=lq,
+                            language=lang,
+                            rationale=f"Localized {lang} query for {topic}",
+                            priority=Severity.HIGH,
+                            target_gap=GapType.LINGUISTIC,
+                        ))
+                else:
+                    # Translate key terms if possible
+                    translated_terms = []
+                    for term in self._extract_key_terms(topic):
+                        translated = self._transliterate(term, lang)
+                        translated_terms.append(translated)
+                    if translated_terms:
+                        q = " ".join(translated_terms)
+                        queries.append(SearchQuery(
+                            query=q,
+                            language=lang,
+                            rationale=f"Seed query in {lang} for {topic}",
+                            priority=Severity.HIGH,
+                            target_gap=GapType.LINGUISTIC,
+                        ))
 
         # Queries for foreign academic traditions
         for lang, tradition_name in foreign.items():
@@ -634,6 +651,7 @@ class DynamicInferenceEngine:
         expectations.extend(self._temporal(cycle))
         expectations.extend(self._entity_coverage(cycle))
         expectations.extend(self._institutional(cycle))
+        expectations.extend(self._access_barriers(cycle))
         return expectations
 
     def _linguistic(self, cycle: int) -> list[Expectation]:
@@ -761,6 +779,31 @@ class DynamicInferenceEngine:
                 severity_if_unmet=Severity.MEDIUM,
                 derived_in_cycle=cycle,
             ))
+        return expectations
+
+    def _access_barriers(self, cycle: int) -> list[Expectation]:
+        """Expectations for gated academic ecosystems (MA-08)."""
+        expectations: list[Expectation] = []
+        geo = GEOGRAPHIC_LINGUISTIC.get(self.postulates.country, {})
+        primary_langs = geo.get("primary_languages", [])
+
+        for lang in primary_langs:
+            eco = LANGUAGE_ECOSYSTEMS.get(lang)
+            if eco is None or eco.access_tier == AccessTier.OPEN_WEB:
+                continue
+
+            db_list = ", ".join(eco.gated_databases[:3])
+            expectations.append(Expectation(
+                description=(
+                    f"{lang.upper()} academic sources on "
+                    f"{self.postulates.topic} behind {db_list} "
+                    f"({lang}, {eco.estimated_gated_share:.0%} gated)"
+                ),
+                gap_type=GapType.ACCESS_BARRIER,
+                severity_if_unmet=Severity.MEDIUM,
+                derived_in_cycle=cycle,
+            ))
+
         return expectations
 
 
@@ -974,30 +1017,69 @@ class AuditEngine:
 def calculate_coverage(
     expectations: list[Expectation],
     anomalies: list[Anomaly],
-) -> float:
-    """Calculate weighted coverage score (0-100).
+) -> CoverageBreakdown:
+    """Calculate split coverage: accessible score + estimated unreachable.
 
-    Uses severity weights: LOW=1, MEDIUM=2, HIGH=3, CRITICAL=5.
-    Anomalies penalize the score (up to -30 points).
+    Partitions expectations into barrier (ACCESS_BARRIER) and accessible.
+    accessible_score is computed from non-barrier expectations.
+    estimated_unreachable is derived from barrier expectations and their
+    associated gated share percentages.
     """
     if not expectations:
-        return 0.0
+        return CoverageBreakdown(
+            accessible_score=0.0,
+            estimated_unreachable=0.0,
+        )
 
+    # Partition expectations
+    barrier_exps = [
+        e for e in expectations if e.gap_type == GapType.ACCESS_BARRIER
+    ]
+    accessible_exps = [
+        e for e in expectations if e.gap_type != GapType.ACCESS_BARRIER
+    ]
+
+    # Accessible score (same formula as before)
     weighted_total = 0.0
     weighted_met = 0.0
-
-    for exp in expectations:
+    for exp in accessible_exps:
         w = exp.severity_if_unmet.weight
         weighted_total += w
         if exp.met:
             weighted_met += w
 
     base = (weighted_met / weighted_total) * 100 if weighted_total > 0 else 0
-
-    penalty = sum(a.severity.weight * 0.5 for a in anomalies)
+    penalty = sum(a.severity.weight * 0.5 for a in anomalies
+                  if a.gap_type != GapType.ACCESS_BARRIER)
     penalty_norm = min(penalty, 30)
+    accessible_score = max(base - penalty_norm, 0.0)
 
-    return max(base - penalty_norm, 0.0)
+    # Estimated unreachable: look up gated share from LANGUAGE_ECOSYSTEMS
+    barrier_annotations: list[str] = []
+    total_gated = 0.0
+    gated_met = sum(1 for e in barrier_exps if e.met)
+
+    for exp in barrier_exps:
+        # Find the language code by checking which ecosystem matches
+        for lang_code, eco in LANGUAGE_ECOSYSTEMS.items():
+            if f"({lang_code}," in exp.description:
+                share = eco.estimated_gated_share * 100
+                total_gated += share
+                db_names = ", ".join(eco.gated_databases[:2])
+                barrier_annotations.append(
+                    f"{lang_code.upper()}: ~{share:.0f}% behind {db_names}"
+                )
+                break
+
+    estimated_unreachable = total_gated / max(len(barrier_exps), 1) if barrier_exps else 0.0
+
+    return CoverageBreakdown(
+        accessible_score=round(accessible_score, 1),
+        estimated_unreachable=round(estimated_unreachable, 1),
+        barrier_annotations=barrier_annotations,
+        gated_expectations_count=len(barrier_exps),
+        gated_expectations_met=gated_met,
+    )
 
 
 # ============================================================
@@ -1031,6 +1113,7 @@ class EpistemixEngine:
         self.cycle_history: list[CycleSnapshot] = []
         self.current_cycle: int = 0
         self.semantic_graph = SemanticGraph()
+        self._last_coverage_breakdown: CoverageBreakdown | None = None
 
     def initialize(self) -> list[SearchQuery]:
         """Generate initial multilingual queries."""
@@ -1094,9 +1177,11 @@ class EpistemixEngine:
         for wp in self.postulates.weighted_postulates.values():
             wp.confidence = wp.effective_confidence(self.current_cycle)
 
-        coverage = calculate_coverage(
+        coverage_breakdown = calculate_coverage(
             self.all_expectations, self.all_anomalies
         )
+        coverage = coverage_breakdown.accessible_score
+        self._last_coverage_breakdown = coverage_breakdown
         snap = self.postulates.snapshot()
         snapshot = CycleSnapshot(
             cycle=self.current_cycle,
@@ -1206,6 +1291,10 @@ class EpistemixEngine:
             "discipline": self.postulates.discipline,
             "cycle": self.current_cycle,
             "coverage_percentage": coverage,
+            "coverage_breakdown": (
+                self._last_coverage_breakdown.to_dict()
+                if self._last_coverage_breakdown else None
+            ),
             "expectations_met": sum(
                 1 for e in self.all_expectations if e.met
             ),

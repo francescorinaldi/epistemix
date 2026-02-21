@@ -322,3 +322,112 @@ def amphipolis_relations() -> list[SemanticRelation]:
             language="en",
         ),
     ]
+
+
+# ============================================================
+# SARS-CoV-2 FIXTURES — Access barrier test scenario
+# ============================================================
+
+@pytest.fixture
+def sars_findings() -> list[Finding]:
+    """Mock findings for SARS-CoV-2 origins (China, virology)."""
+    return [
+        Finding(
+            source="Proximal Origin of SARS-CoV-2",
+            language="en",
+            author="Andersen",
+            institution="Scripps Research",
+            theory_supported="Natural zoonotic spillover",
+            source_type="peer_reviewed",
+            year=2020,
+            entities_mentioned=[
+                "SARS-CoV-2", "RaTG13", "Wuhan",
+                "pangolin", "bat coronavirus",
+            ],
+        ),
+        Finding(
+            source="Wuhan Institute of Virology report",
+            language="en",
+            author="Shi Zhengli",
+            institution="Wuhan Institute of Virology",
+            theory_supported="Natural origins",
+            source_type="institutional",
+            year=2020,
+            entities_mentioned=[
+                "SARS-CoV-2", "bat coronavirus", "WIV",
+                "RaTG13", "Shi Zhengli",
+            ],
+        ),
+        Finding(
+            source="WHO-China joint study report",
+            language="en",
+            author="",
+            institution="World Health Organization",
+            theory_supported="",
+            source_type="institutional",
+            year=2021,
+            entities_mentioned=[
+                "SARS-CoV-2", "Huanan Seafood Market",
+                "Wuhan", "zoonotic origin",
+            ],
+        ),
+        Finding(
+            source="MERS-CoV comparison study",
+            language="en",
+            author="Zaki",
+            institution="Erasmus Medical Center",
+            theory_supported="",
+            source_type="peer_reviewed",
+            year=2021,
+            entities_mentioned=[
+                "MERS-CoV", "SARS-CoV-2", "coronavirus",
+                "camel", "zoonotic",
+            ],
+        ),
+    ]
+
+
+@pytest.fixture
+def sars_connector() -> "MockConnector":
+    """MockConnector configured for SARS-CoV-2 scenario."""
+    from epistemix.connector import MockConnector
+    from epistemix.models import SemanticRelation, RelationType
+
+    connector = MockConnector()
+    connector.register_findings("sars", [
+        Finding(
+            source="Fudan University genome analysis",
+            language="en",
+            author="Zhang Yongzhen",
+            institution="Fudan University",
+            theory_supported="Natural origins",
+            source_type="peer_reviewed",
+            year=2020,
+            entities_mentioned=["SARS-CoV-2", "genome", "Wuhan"],
+        ),
+    ])
+    connector.register_findings("virus origins", [
+        Finding(
+            source="Lab leak hypothesis review",
+            language="en",
+            author="",
+            institution="MIT Technology Review",
+            theory_supported="Laboratory origin",
+            source_type="journalistic",
+            year=2021,
+            entities_mentioned=["SARS-CoV-2", "WIV", "gain of function"],
+        ),
+    ])
+    connector.register_relations([
+        SemanticRelation(
+            source="Shi Zhengli", target="Andersen",
+            relation=RelationType.CONTESTS, confidence=0.7,
+            evidence="Competing origin hypotheses",
+            language="en",
+        ),
+    ])
+    connector.register_localized_queries("zh", [
+        "\u65b0\u51a0\u75c5\u6bd2\u8d77\u6e90\u7814\u7a76",
+        "SARS-CoV-2\u6765\u6e90\u8c03\u67e5",
+    ])
+    return connector
