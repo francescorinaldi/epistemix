@@ -23,7 +23,7 @@ epistemix/
 ├── src/epistemix/           # Core Python library (THE BRAIN)
 │   ├── models.py            # All data structures (Finding, Postulate, Anomaly, etc.)
 │   ├── meta_axioms.py       # 7 Level 0 meta-axioms
-│   ├── citation_graph.py    # BFS school detection, citation islands
+│   ├── semantic_graph.py     # Typed relation graph, school/fracture detection
 │   ├── disciplines.py       # Evidence → expected discipline mapping
 │   ├── content_analysis.py  # Structural absence, convergence, empty query patterns
 │   ├── connector.py         # MockConnector (tests) / ClaudeConnector (production)
@@ -31,10 +31,10 @@ epistemix/
 │   ├── multi_agent.py       # Dual-agent α/β + arbiter
 │   └── run.py               # CLI entry point
 │
-├── tests/                   # 138 tests (pytest)
+├── tests/                   # 171 tests (pytest)
 │   ├── conftest.py          # Shared fixtures, Amphipolis mock data
 │   ├── test_models.py       # Data structure tests
-│   ├── test_citation_graph.py
+│   ├── test_semantic_graph.py
 │   ├── test_disciplines.py
 │   ├── test_content_analysis.py
 │   ├── test_connector.py
@@ -98,7 +98,7 @@ docker-compose up supabase-db
 meta_axioms.py ──┐
                  │
 models.py ───────┤
-                 ├──► citation_graph.py ──┐
+                 ├──► semantic_graph.py ──┐
                  ├──► disciplines.py ─────┤
                  ├──► content_analysis.py ┤
                  │                        │
@@ -121,7 +121,8 @@ models.py ───────┤
 | `models.py` centralized | All data structures in one file | Prevents circular imports, clean DAG |
 | MockConnector for tests | Pattern-matched canned responses | Zero API cost during development |
 | Coverage as lower bound | Denominator grows as we discover more postulates | Philosophically honest — can never claim completeness |
-| BFS for school detection | Connected components on undirected citation graph | No networkx dependency, O(V+E) |
+| Semantic relation graph (v3) | 8 typed relations (SUPPORTS, CONTESTS, CONTRADICTS, CITES, EXTENDS, SUPERVISES, COAUTHORS, TRANSLATES) | Replaces untyped citation edges, enables fracture/influence detection |
+| Union-find for school detection | SUPPORTS clusters via union-find | No networkx dependency, O(V·α(V)) |
 | Evidence→discipline map | Keyword matching in `EVIDENCE_DISCIPLINE_MAP` | Extensible, no ML needed |
 | Dual agents (α/β) | Different axiom weightings, not different prompts | Reproducible, deterministic with MockConnector |
 | Scale-to-zero workers | Fly.io Machines with `auto_destroy: true` | $0 when no audits running |
@@ -146,11 +147,11 @@ models.py ───────┤
 
 The `connector.py` module is the **only place** where AI provider coupling exists.
 
-- **MockConnector**: Pattern-matched responses. Used in all 138 tests. Zero cost.
+- **MockConnector**: Pattern-matched responses. Used in all 171 tests. Zero cost.
 - **ClaudeConnector**: Anthropic SDK with `web_search_20250305` tool, budget tracking, retry with backoff.
 - **Switching**: Set `ANTHROPIC_API_KEY` env var → worker uses `ClaudeConnector`. No key → falls back to `MockConnector`.
 
-To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (3 methods: `query()`, `search()`, `total_cost`).
+To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (4 methods: `query()`, `search()`, `extract_relations()`, `total_cost`).
 
 ## Database Schema (Supabase PostgreSQL)
 
@@ -175,11 +176,13 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (3 metho
 
 ## What NOT to Do
 
+- Do NOT make up information. If you are unsure about something, look it up or say you don't know. Never guess or fabricate answers. ALWAYS search the web to double-check information before presenting it as fact.
+- ALWAYS run `git fetch && git pull` at the start of a session to check if anything changed on the repo before making changes.
 - Do NOT add dependencies to the Python core library (zero-dep policy for `src/epistemix/`)
 - Do NOT import upward in the dependency graph
 - Do NOT store secrets in code (use env vars)
-- Do NOT add `networkx` — citation graph uses stdlib BFS
-- Do NOT modify test fixtures in `conftest.py` without running all 138 tests
+- Do NOT add `networkx` — semantic graph uses stdlib union-find and DFS
+- Do NOT modify test fixtures in `conftest.py` without running all 171 tests
 - Do NOT use `git push --force` on main
 - Do NOT create always-on infrastructure (everything scales to zero)
 
@@ -187,9 +190,10 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (3 metho
 
 **Done:**
 - Complete Python core library (10 modules)
-- Full test suite (138 tests, all passing)
+- Full test suite (171 tests, all passing)
 - v3 Phase 1: WeightedPostulate with confidence scoring
 - v3 Phase 2: NegativePostulate with empty-query feedback loop
+- v3 Phase 3: Semantic Relation Graph (8 typed relations, replaces citation_graph)
 - v3 Phase 7: Temporal decay (per-domain configurable)
 - Next.js web app (landing, auth, dashboard, live audit page, 6 components)
 - Fly.io worker (scale-to-zero, real-time progress)
@@ -199,7 +203,6 @@ To add a new provider (OpenAI, Gemini, etc.): implement `BaseConnector` (3 metho
 - Live validation: Antikythera mechanism test (Opus 4.6, Feb 2026)
 
 **Not done yet — see TODO.md and PLAN.md:**
-- v3 Phase 3: Semantic Relation Graph
 - v3 Phase 4: Arabic + Chinese with access-barrier axioms
 - v3 Phase 5: Cross-session memory (knowledge store)
 - v3 Phase 6: Generative multi-agent

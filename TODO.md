@@ -12,7 +12,7 @@
 
 - [x] `models.py` — Data structures (Finding, Postulate, Anomaly, Query, CoverageScore, ResearchState)
 - [x] `meta_axioms.py` — 7 Level 0 meta-axioms with postulate templates
-- [x] `citation_graph.py` — BFS school detection, citation islands, priority ranking
+- [x] `citation_graph.py` → `semantic_graph.py` — Typed relation graph, school/fracture detection
 - [x] `disciplines.py` — Evidence→discipline mapping, gap detection
 - [x] `content_analysis.py` — Structural absence, convergence, empty query analysis
 - [x] `connector.py` — MockConnector + ClaudeConnector
@@ -30,7 +30,7 @@
 - [x] Temporal decay per domain (archaeology: 0.02, finance: 0.15)
 - [x] CycleSnapshot v3 fields (weighted_postulates_count, avg_confidence, negative_postulates_count)
 - [x] Engine serialization includes v3 data
-- [x] 138 tests (all passing)
+- [x] 171 tests (all passing)
 
 ## Phase 2: Production Stack (COMPLETE — code written, not yet deployed)
 
@@ -66,14 +66,14 @@
 - [ ] **API key management** — Enterprise customers get API keys for programmatic access
 - [ ] **Plan upgrade prompts** — In-app prompts when free tier limits reached
 
-## v3 Phase 3: Semantic Relation Graph (NOT STARTED)
+## v3 Phase 3: Semantic Relation Graph (COMPLETE)
 
-- [ ] **RelationType enum** — SUPPORTS, CONTESTS, CITES, EXTENDS, SUPERVISES, COAUTHORS
-- [ ] **SemanticRelation dataclass** — source, target, relation, confidence, evidence
-- [ ] **semantic_graph.py** — Replaces citation_graph.py for v3
-- [ ] **LLM relation extraction** — Connector prompts for relationship extraction
-- [ ] **Automated inference** — Schools = SUPPORTS clusters, fractures = CONTESTS pairs
-- [ ] **Relational coverage** — Not enough to find entities; must map their relations
+- [x] **RelationType enum** — SUPPORTS, CONTESTS, CONTRADICTS, CITES, EXTENDS, SUPERVISES, COAUTHORS, TRANSLATES
+- [x] **SemanticRelation dataclass** — source, target, relation, confidence, evidence, language, cycle
+- [x] **semantic_graph.py** — Replaces citation_graph.py (449 lines, 7 detectors, 36 tests)
+- [x] **LLM relation extraction** — extract_relations() in BaseConnector, MockConnector, ClaudeConnector
+- [x] **Automated inference** — Schools = SUPPORTS union-find, fractures = CONTESTS/CONTRADICTS, influence = DFS chains
+- [x] **Engine integration** — run_cycle(connector=None), incremental extraction, backward compatible
 
 ## v3 Phase 4: Arabic + Chinese Access Barriers (NOT STARTED)
 
@@ -136,7 +136,7 @@
 
 For the next development session, the recommended order is:
 
-1. **v3 Phase 3: Semantic Relation Graph** — The qualitative leap (replaces citation_graph)
+1. ~~**v3 Phase 3: Semantic Relation Graph**~~ — DONE (PR #4, merged Feb 2026)
 2. **v3 Phase 4: Arabic + Chinese** — Validated by live test (Antikythera showed need)
 3. **v3 Phase 5: Cross-Session Memory** — The moat (accumulated axioms are the defensible asset)
 4. **Deploy to Supabase/Vercel/Fly.io** — Get production stack running
