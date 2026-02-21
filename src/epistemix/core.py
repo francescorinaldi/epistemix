@@ -38,6 +38,7 @@ from epistemix.models import (
     WeightedPostulate,
 )
 from epistemix.knowledge import (
+    EntityRegistry,
     GEOGRAPHIC_LINGUISTIC,
     KNOWN_TRANSLITERATIONS,
     STOPWORDS,
@@ -78,12 +79,21 @@ class DynamicPostulates:
     so far and their investigation status.
     """
 
-    def __init__(self, country: str, topic: str, discipline: str = "") -> None:
+    def __init__(
+        self,
+        country: str,
+        topic: str,
+        discipline: str = "",
+        entity_registry: EntityRegistry | None = None,
+    ) -> None:
         self.country = country
         self.topic = topic
         self.discipline = discipline
         self.discovery_year: int = 0
         self.ongoing: bool = True
+
+        # Shared entity registry for dynamic classification
+        self.entity_registry = entity_registry or EntityRegistry()
 
         # These grow dynamically
         self.entities: dict[str, Entity] = {}
@@ -112,9 +122,7 @@ class DynamicPostulates:
 
         # Process author
         if finding.author:
-            canonical_author = KNOWN_TRANSLITERATIONS.get(
-                finding.author.lower(), finding.author
-            )
+            canonical_author = self.entity_registry.normalize(finding.author)
             if self._register_entity(
                 finding.author, EntityType.SCHOLAR,
                 finding.source, finding.language,
@@ -145,7 +153,7 @@ class DynamicPostulates:
 
         # Process mentioned entities
         for name in finding.entities_mentioned:
-            entity_type_str = classify_entity_name(name)
+            entity_type_str = self.entity_registry.classify(name)
             entity_type = EntityType(entity_type_str)
             if self._register_entity(
                 name, entity_type,
@@ -154,9 +162,7 @@ class DynamicPostulates:
                 new_entities.append(name)
             else:
                 # Already known — increment mention count
-                key = KNOWN_TRANSLITERATIONS.get(
-                    name.lower(), name
-                ).lower()
+                key = self.entity_registry.normalize(name).lower()
                 if key in self.entities:
                     self.entities[key].times_mentioned += 1
                     self.entities[key].languages_seen_in.add(finding.language)
@@ -175,7 +181,7 @@ class DynamicPostulates:
         institution: str = "",
     ) -> bool:
         """Register entity if new. Returns True if new."""
-        canonical = KNOWN_TRANSLITERATIONS.get(name.lower(), name)
+        canonical = self.entity_registry.normalize(name)
         key = canonical.lower()
 
         if key in self.entities:
@@ -1021,8 +1027,13 @@ class EpistemixEngine:
         country: str,
         topic: str,
         discipline: str = "",
+        entity_registry: EntityRegistry | None = None,
     ) -> None:
-        self.postulates = DynamicPostulates(country, topic, discipline)
+        self.entity_registry = entity_registry or EntityRegistry()
+        self.postulates = DynamicPostulates(
+            country, topic, discipline,
+            entity_registry=self.entity_registry,
+        )
         self.query_gen = MultilingualQueryGenerator(self.postulates)
         self.findings: list[Finding] = []
         self.all_expectations: list[Expectation] = []

@@ -322,3 +322,135 @@ def amphipolis_relations() -> list[SemanticRelation]:
             language="en",
         ),
     ]
+
+
+# ============================================================
+# JFK ASSASSINATION FINDINGS — investigative scenario
+# ============================================================
+
+@pytest.fixture
+def jfk_topic() -> str:
+    return "JFK assassination"
+
+
+@pytest.fixture
+def jfk_country() -> str:
+    return "United States"
+
+
+@pytest.fixture
+def jfk_discipline() -> str:
+    return "history"
+
+
+@pytest.fixture
+def jfk_cycle_0_findings() -> list[Finding]:
+    """Initial cycle: official accounts and key actors."""
+    return [
+        Finding(
+            source="Warren Commission Report (1964)",
+            language="en",
+            author="Earl Warren",
+            institution="Warren Commission",
+            theory_supported="Lone gunman",
+            source_type="institutional",
+            year=1964,
+            entities_mentioned=[
+                "Lee Harvey Oswald", "Jack Ruby",
+                "Texas School Book Depository", "Dealey Plaza",
+            ],
+        ),
+        Finding(
+            source="House Select Committee on Assassinations Report",
+            language="en",
+            author="G. Robert Blakey",
+            institution="US House of Representatives",
+            theory_supported="Conspiracy probable",
+            source_type="institutional",
+            year=1979,
+            entities_mentioned=[
+                "Lee Harvey Oswald", "Organized crime",
+                "CIA", "Dallas Police Department",
+            ],
+        ),
+        Finding(
+            source="Crossfire: The Plot That Killed Kennedy",
+            language="en",
+            author="Jim Marrs",
+            institution="",
+            theory_supported="Conspiracy probable",
+            source_type="journalistic",
+            year=1989,
+            entities_mentioned=[
+                "Lee Harvey Oswald", "Jack Ruby", "CIA",
+                "FBI", "Lyndon B. Johnson",
+            ],
+        ),
+        Finding(
+            source="Oswald: el asesino solitario",
+            language="es",
+            author="Carlos Fuentes Mendoza",
+            institution="Universidad Nacional Autónoma de México",
+            theory_supported="Lone gunman",
+            source_type="peer_reviewed",
+            year=2013,
+            entities_mentioned=[
+                "Lee Harvey Oswald", "Marina Oswald",
+                "Dallas", "Mexico City",
+            ],
+        ),
+    ]
+
+
+@pytest.fixture
+def jfk_cycle_1_findings() -> list[Finding]:
+    """Second cycle: forensic and media sources."""
+    return [
+        Finding(
+            source="JFK: An Unfinished Life",
+            language="en",
+            author="Robert Dallek",
+            institution="Boston University",
+            theory_supported="Lone gunman",
+            source_type="peer_reviewed",
+            year=2003,
+            entities_mentioned=[
+                "Lee Harvey Oswald", "Robert F. Kennedy",
+                "Secret Service",
+            ],
+        ),
+        Finding(
+            source="Reclaiming History",
+            language="en",
+            author="Vincent Bugliosi",
+            institution="",
+            theory_supported="Lone gunman",
+            source_type="journalistic",
+            year=2007,
+            entities_mentioned=[
+                "Lee Harvey Oswald", "Jack Ruby",
+                "Zapruder film", "Parkland Hospital",
+            ],
+        ),
+        Finding(
+            source="Ubiystvo Kennedi: novye fakty",
+            language="ru",
+            author="Nikolai Yakovlev",
+            institution="Russian Academy of Sciences",
+            theory_supported="Conspiracy probable",
+            source_type="peer_reviewed",
+            year=1985,
+            entities_mentioned=[
+                "Lee Harvey Oswald", "KGB",
+                "Cold War", "Cuba",
+            ],
+        ),
+    ]
+
+
+@pytest.fixture
+def jfk_all_findings(
+    jfk_cycle_0_findings, jfk_cycle_1_findings,
+) -> list[Finding]:
+    """All JFK findings from both cycles."""
+    return jfk_cycle_0_findings + jfk_cycle_1_findings

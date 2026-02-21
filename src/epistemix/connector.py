@@ -36,6 +36,7 @@ Each finding should be a JSON object with these fields:
 - "source_type": one of "peer_reviewed", "institutional", "news", "journalistic" (string)
 - "year": publication year if known (integer)
 - "entities_mentioned": list of entity names mentioned (array of strings)
+- "entity_types": a map of entity names to their type (object, optional). Types: "scholar", "institution", "historical_figure", "ancient_source", "site", "theory", "publication", "evidence", "method", "event"
 
 Return ONLY a JSON array of findings. No other text."""
 
@@ -185,6 +186,7 @@ class ClaudeConnector(BaseConnector):
         api_key: str | None = None,
         model: str = "claude-sonnet-4-20250514",
         max_budget: float = 10.0,
+        entity_registry: Any | None = None,
     ) -> None:
         try:
             import anthropic
@@ -200,6 +202,7 @@ class ClaudeConnector(BaseConnector):
         self._total_input_tokens = 0
         self._total_output_tokens = 0
         self._call_count = 0
+        self._entity_registry = entity_registry
 
     def execute_query(self, query: SearchQuery) -> list[Finding]:
         """Execute a query via Claude API with web search."""
@@ -288,7 +291,11 @@ class ClaudeConnector(BaseConnector):
     def _parse_findings(
         self, text: str, query: SearchQuery
     ) -> list[Finding]:
-        """Parse JSON response into Finding objects."""
+        """Parse JSON response into Finding objects.
+
+        If entity_types is present and an entity_registry is configured,
+        dynamically registers entity classifications discovered by the API.
+        """
         json_data = extract_json(text)
         if not json_data or not isinstance(json_data, list):
             return []
@@ -308,6 +315,12 @@ class ClaudeConnector(BaseConnector):
                 entities_mentioned=item.get("entities_mentioned", []),
                 search_query_used=query.query,
             ))
+
+            # Entity enrichment: register types discovered by the API
+            entity_types = item.get("entity_types")
+            if entity_types and isinstance(entity_types, dict) and self._entity_registry:
+                self._entity_registry.register_many(entity_types)
+
         return findings
 
     def extract_relations(
