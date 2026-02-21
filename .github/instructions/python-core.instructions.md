@@ -9,17 +9,27 @@ This is the zero-dependency core of Epistemix. Every module here uses stdlib onl
 ## Dependency DAG (strict — violations break the build)
 
 ```
-meta_axioms.py → models.py → semantic_graph.py → core.py → run.py
-                            → disciplines.py    ↗
-                            → content_analysis.py ↗
-                            → connector.py      ↗
+meta_axioms.py ──┐
+                 │
+models.py ───────┤
+                 ├──► semantic_graph.py ──┐
+                 ├──► disciplines.py ─────┤
+                 ├──► content_analysis.py ┤
+                 │                        │
+                 ├──► connector.py        │
+                 │       │                │
+                 │       ▼                ▼
+                 └──► core.py ──────► multi_agent.py
+                                          │
+                                          ▼
+                                       run.py
 ```
 
 Never import upward. `models.py` imports nothing from the project. `core.py` imports from everything above it.
 
 ## Constraints
 
-- Zero external dependencies: only `dataclasses`, `enum`, `collections`, `re`, `json`, `time`, `abc`, `typing`
+- Zero external dependencies: Python standard library only (for example: `dataclasses`, `enum`, `collections`, `re`, `json`, `time`, `abc`, `typing`)
 - Never add `networkx`, `pandas`, `numpy`, or any third-party package
 - `SemanticGraph` uses stdlib union-find and DFS
 - `SYSTEM_PROMPT` is for finding extraction only; `RELATION_SYSTEM_PROMPT` is for relation extraction only

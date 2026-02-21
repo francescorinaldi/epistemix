@@ -4,7 +4,7 @@ applyTo: "tests/**/*.py"
 
 # Test Suite Rules
 
-171 tests, all must pass. Test runner: `pytest tests/ -v`
+All tests must pass. Run the full suite with: `pytest tests/ -v`
 
 ## Fixtures
 
@@ -17,4 +17,4 @@ applyTo: "tests/**/*.py"
 - Reference scenario: Amphipolis tomb excavation (Greece, archaeology)
 - Use `MockConnector.register_findings()` for test data, never real API calls
 - Use `MockConnector.register_relations()` for semantic graph test data
-- Test file naming: `test_<module>.py` mirrors `src/epistemix/<module>.py`
+- Test file naming: most `test_<module>.py` files mirror `src/epistemix/<module>.py` (with a few scenario/utility exceptions)
